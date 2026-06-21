@@ -32,25 +32,38 @@ int Player::directionIndex(Direction dir) const {
 void Player::update(float deltaTime) {
     m_moving = false;
 
-    if (glfwGetKey(m_engine->window(), GLFW_KEY_W) == GLFW_PRESS) {
+    bool wPressed = glfwGetKey(m_engine->window(), GLFW_KEY_W) == GLFW_PRESS;
+    bool sPressed = glfwGetKey(m_engine->window(), GLFW_KEY_S) == GLFW_PRESS;
+    bool aPressed = glfwGetKey(m_engine->window(), GLFW_KEY_A) == GLFW_PRESS;
+    bool dPressed = glfwGetKey(m_engine->window(), GLFW_KEY_D) == GLFW_PRESS;
+
+    if (wPressed) {
         m_position.y += MOVE_SPEED * deltaTime;
-        m_direction = Direction::Back;
         m_moving = true;
     }
-    if (glfwGetKey(m_engine->window(), GLFW_KEY_S) == GLFW_PRESS) {
+    if (sPressed) {
         m_position.y -= MOVE_SPEED * deltaTime;
-        m_direction = Direction::Front;
         m_moving = true;
     }
-    if (glfwGetKey(m_engine->window(), GLFW_KEY_A) == GLFW_PRESS) {
+    if (aPressed) {
         m_position.x -= MOVE_SPEED * deltaTime;
-        m_direction = Direction::Left;
         m_moving = true;
     }
-    if (glfwGetKey(m_engine->window(), GLFW_KEY_D) == GLFW_PRESS) {
+    if (dPressed) {
         m_position.x += MOVE_SPEED * deltaTime;
-        m_direction = Direction::Right;
         m_moving = true;
+    }
+
+    if (sPressed && (dPressed || aPressed)) {
+        m_direction = Direction::Front;
+    } else if (wPressed) {
+        m_direction = Direction::Back;
+    } else if (sPressed) {
+        m_direction = Direction::Front;
+    } else if (aPressed) {
+        m_direction = Direction::Left;
+    } else if (dPressed) {
+        m_direction = Direction::Right;
     }
 
     if (m_moving) {
