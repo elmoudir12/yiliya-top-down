@@ -27,8 +27,8 @@ public:
     glm::vec2 position() const { return m_position; }
     void setPosition(const glm::vec2& pos) { m_position = pos; }
 
-    static constexpr float PLAYER_WIDTH = 32.0f;
-    static constexpr float PLAYER_HEIGHT = 32.0f;
+    static constexpr float PLAYER_WIDTH = 48.0f;
+    static constexpr float PLAYER_HEIGHT = 48.0f;
 
 private:
     Engine* m_engine;
