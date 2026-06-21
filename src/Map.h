@@ -37,17 +37,6 @@ public:
     float worldWidth() const { return m_width * m_tileSize; }
     float worldHeight() const { return m_height * m_tileSize; }
 
-    struct MapDefinition {
-        std::string name;
-        int width, height;
-        int tileSize;
-        int tilesetCols;
-        std::vector<int> ground;
-        std::vector<int> collision;
-        std::vector<Transition> transitions;
-        int spawnTileX, spawnTileY;
-    };
-
 private:
     Engine* m_engine;
     Renderer* m_renderer;
@@ -58,7 +47,7 @@ private:
     std::string m_mapName;
     int m_width = 0, m_height = 0;
     int m_tileSize = 32;
-    int m_tilesetCols = 8;
+    int m_tilesetCols = 16;
 
     std::vector<int> m_groundTiles;
     std::vector<int> m_collisionTiles;
@@ -74,5 +63,4 @@ private:
     uint32_t m_indexCount = 0;
 
     void buildMesh();
-    const MapDefinition& getMapDefinition(const std::string& name);
 };

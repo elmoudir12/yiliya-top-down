@@ -16,6 +16,7 @@ add_executable(yiliya_game
     src/Player.cpp
     src/Map.cpp
     src/MapManager.cpp
+    src/TmxLoader.cpp
 )
 
 target_include_directories(yiliya_game PRIVATE
@@ -28,6 +29,7 @@ target_link_libraries(yiliya_game
     ${Vulkan_LIBRARIES}
     glfw
     glm::glm
+    z
 )
 
 target_compile_options(yiliya_game PRIVATE -Wall -Wextra -Wno-unused-parameter)

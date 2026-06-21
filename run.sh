@@ -1,3 +1,3 @@
 #!/bin/bash
 cd "$(dirname "$0")"
-./build/yiliya_game
+cmake -B build && cmake --build build && ./build/yiliya_game

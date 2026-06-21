@@ -1,14 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.10" tiledversion="1.11.0" orientation="orthogonal" renderorder="right-down" width="20" height="15" tilewidth="32" tileheight="32" infinite="0" nextlayerid="3" nextobjectid="1">
- <tileset firstgid="1" source="../assets/tiles/tileset.tsx"/>
+<map version="1.8" tiledversion="1.8.2" orientation="orthogonal" renderorder="right-down" width="20" height="15" tilewidth="32" tileheight="32" infinite="0" nextlayerid="3" nextobjectid="1">
+ <tileset firstgid="1" name="stone_house" tilewidth="32" tileheight="32" tilecount="256" columns="16">
+  <image source="tileset.png" width="512" height="512"/>
+ </tileset>
  <layer id="1" name="ground" width="20" height="15">
   <data encoding="base64" compression="zlib">
-eJwzZGBgMKQyDqISRjaPkUI8at6oeZpArIWEtSk0TxKIpZCwNIXmcQIxFxLmHsDwQ8bIasjJv+gYZh45ZQsA5fAgXA==
+   eJwzZGBgCAbiEAppfyAOAOJAIE4G4hQq0PZAXAjEQUDMSCEGmWE4at6INo8TiLmQMDeF5kkCsRQSlqbQPE0g1kLC2kSY10jl8DOEspFwA7KaEAZEng8mwAaZhZ6nk5DMS8Iin4xDLAVqHgDYlyuD
   </data>
  </layer>
  <layer id="2" name="collision" width="20" height="15">
   <data encoding="base64" compression="zlib">
-eJxjZGBgYBwCmFIwat6oeaPmEW8eNrOpnZfJ0QsAJs8AeQ==
+   eJxjYBgFo2AUjIKhAQAEsAAB
   </data>
  </layer>
 </map>
