@@ -42,6 +42,12 @@ void Engine::initWindow() {
         auto* engine = reinterpret_cast<Engine*>(glfwGetWindowUserPointer(window));
         if (engine) engine->m_framebufferResized = true;
     });
+    glfwSetScrollCallback(m_window, [](GLFWwindow* window, double xoffset, double yoffset) {
+        auto* engine = reinterpret_cast<Engine*>(glfwGetWindowUserPointer(window));
+        if (engine) {
+            engine->m_zoom = std::clamp(engine->m_zoom * (yoffset > 0 ? 1.1f : 1.0f / 1.1f), 0.1f, 10.0f);
+        }
+    });
 }
 
 void Engine::initVulkan() {

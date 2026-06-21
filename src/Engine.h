@@ -59,6 +59,7 @@ public:
     VkCommandBuffer commandBuffer(uint32_t imageIndex) const { return m_commandBuffers[imageIndex]; }
     VkFramebuffer framebuffer(uint32_t imageIndex) const { return m_swapChainFramebuffers[imageIndex]; }
     Renderer* renderer() const { return m_renderer; }
+    float zoom() const { return m_zoom; }
     void recreateSwapChain();
 
     uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) const;
@@ -112,6 +113,7 @@ private:
 
     uint32_t m_currentFrame = 0;
     bool m_framebufferResized = false;
+    float m_zoom = 1.0f;
 
     Renderer* m_renderer = nullptr;
     Player* m_player = nullptr;

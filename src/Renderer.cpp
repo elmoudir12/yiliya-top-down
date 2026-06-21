@@ -150,12 +150,14 @@ bool Renderer::beginFrame() {
     vkWaitForFences(m_engine->device(), 1, &fence, VK_TRUE, UINT64_MAX);
 
     VkExtent2D extent = m_engine->swapChainExtent();
+    float zoom = m_engine->zoom();
     float aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
-    float left = -aspect * 360.0f;
-    float right = aspect * 360.0f;
+    float viewSize = 360.0f / zoom;
+    float left = -aspect * viewSize;
+    float right = aspect * viewSize;
 
     UniformBufferObject ubo{};
-    ubo.projection = glm::ortho(left, right, 360.0f, -360.0f, -1.0f, 1.0f);
+    ubo.projection = glm::ortho(left, right, viewSize, -viewSize, -1.0f, 1.0f);
     memcpy(m_uniformBufferMapped, &ubo, sizeof(ubo));
 
     m_currentCommandBuffer = m_engine->commandBuffer(m_imageIndex);
