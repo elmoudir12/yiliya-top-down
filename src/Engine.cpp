@@ -80,6 +80,7 @@ void Engine::mainLoop() {
         m_lastTime = now;
 
         m_player->update(deltaTime);
+        m_cameraPos = m_player->position();
 
         if (glfwGetKey(m_window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
             glfwSetWindowShouldClose(m_window, GLFW_TRUE);

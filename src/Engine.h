@@ -60,6 +60,7 @@ public:
     VkFramebuffer framebuffer(uint32_t imageIndex) const { return m_swapChainFramebuffers[imageIndex]; }
     Renderer* renderer() const { return m_renderer; }
     float zoom() const { return m_zoom; }
+    glm::vec2 cameraPos() const { return m_cameraPos; }
     void recreateSwapChain();
 
     uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) const;
@@ -114,6 +115,7 @@ private:
     uint32_t m_currentFrame = 0;
     bool m_framebufferResized = false;
     float m_zoom = 1.0f;
+    glm::vec2 m_cameraPos{ 0.0f, 0.0f };
 
     Renderer* m_renderer = nullptr;
     Player* m_player = nullptr;

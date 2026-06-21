@@ -156,8 +156,11 @@ bool Renderer::beginFrame() {
     float left = -aspect * viewSize;
     float right = aspect * viewSize;
 
+    glm::vec2 camPos = m_engine->cameraPos();
     UniformBufferObject ubo{};
-    ubo.projection = glm::ortho(left, right, viewSize, -viewSize, -1.0f, 1.0f);
+    glm::mat4 proj = glm::ortho(left, right, viewSize, -viewSize, -1.0f, 1.0f);
+    glm::mat4 view = glm::translate(glm::mat4(1.0f), glm::vec3(-camPos, 0.0f));
+    ubo.projection = proj * view;
     memcpy(m_uniformBufferMapped, &ubo, sizeof(ubo));
 
     m_currentCommandBuffer = m_engine->commandBuffer(m_imageIndex);
