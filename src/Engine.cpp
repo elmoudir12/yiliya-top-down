@@ -36,7 +36,7 @@ void Engine::run() {
 void Engine::initWindow() {
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    m_window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Yiliya Top Down", nullptr, nullptr);
+    m_window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Yir Top Down", nullptr, nullptr);
     glfwSetWindowUserPointer(m_window, this);
     glfwSetFramebufferSizeCallback(m_window, [](GLFWwindow* window, int width, int height) {
         auto* engine = reinterpret_cast<Engine*>(glfwGetWindowUserPointer(window));

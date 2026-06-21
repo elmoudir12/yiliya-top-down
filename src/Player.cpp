@@ -13,7 +13,7 @@ void Player::loadTextures() {
     static const char* dirNames[] = { "front", "back", "left", "right" };
     for (int d = 0; d < 4; ++d) {
         for (int f = 0; f < 4; ++f) {
-            std::string path = "assets/Yiliya/walking " + std::string(dirNames[d]) + " " + std::to_string(f + 1) + ".png";
+            std::string path = "assets/yir/walk " + std::string(dirNames[d]) + " " + std::to_string(f + 1) + ".png";
             m_textures[d][f] = std::make_unique<Texture>(m_engine, path);
         }
     }
