@@ -62,14 +62,14 @@ void Player::update(float deltaTime, const Map* currentMap) {
     float step = MOVE_SPEED * deltaTime;
 
     if (wPressed) {
-        float newY = m_position.y + step;
+        float newY = m_position.y - step;
         if (canMoveTo(m_position.x, newY, currentMap)) {
             m_position.y = newY;
             m_moving = true;
         }
     }
     if (sPressed) {
-        float newY = m_position.y - step;
+        float newY = m_position.y + step;
         if (canMoveTo(m_position.x, newY, currentMap)) {
             m_position.y = newY;
             m_moving = true;

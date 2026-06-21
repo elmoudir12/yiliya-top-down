@@ -5,10 +5,10 @@
 #include <cstring>
 
 static const std::vector<QuadVertex> quadVertices = {
-    {{-0.5f, -0.5f}, {0.0f, 1.0f}},
-    {{ 0.5f, -0.5f}, {1.0f, 1.0f}},
-    {{ 0.5f,  0.5f}, {1.0f, 0.0f}},
-    {{-0.5f,  0.5f}, {0.0f, 0.0f}},
+    {{-0.5f, -0.5f}, {0.0f, 0.0f}},
+    {{ 0.5f, -0.5f}, {1.0f, 0.0f}},
+    {{ 0.5f,  0.5f}, {1.0f, 1.0f}},
+    {{-0.5f,  0.5f}, {0.0f, 1.0f}},
 };
 
 static const std::vector<uint16_t> quadIndices = { 0, 1, 2, 2, 3, 0 };
@@ -157,7 +157,7 @@ bool Renderer::beginFrame() {
 
     glm::vec2 camPos = m_engine->cameraPos();
     UniformBufferObject ubo{};
-    glm::mat4 proj = glm::ortho(left, right, viewSize, -viewSize, -1.0f, 1.0f);
+    glm::mat4 proj = glm::ortho(left, right, -viewSize, viewSize, -1.0f, 1.0f);
     glm::mat4 view = glm::translate(glm::mat4(1.0f), glm::vec3(-camPos, 0.0f));
     ubo.projection = proj * view;
     memcpy(m_uniformBufferMapped, &ubo, sizeof(ubo));

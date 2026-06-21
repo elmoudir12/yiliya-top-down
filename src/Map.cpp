@@ -30,9 +30,9 @@ static const std::vector<Map::MapDefinition>& getBuiltinMaps() {
                 48,81, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,81,48,
                 48,81, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,81,48,
                 48,81, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,81,48,
-                48,81, 0, 0, 0, 0, 0,40,41,41,41,42, 0, 0, 0, 0, 0, 0,81,48,
-                48,81, 0, 0, 0, 0, 0,24,25,25,25,26, 0, 0, 0, 0, 0, 0,81,48,
                 48,81, 0, 0, 0, 0, 0, 8, 9, 9, 9,10, 0, 0, 0, 0, 0, 0,81,48,
+                48,81, 0, 0, 0, 0, 0,24,25,25,25,26, 0, 0, 0, 0, 0, 0,81,48,
+                48,81, 0, 0, 0, 0, 0,40,41,41,41,42, 0, 0, 0, 0, 0, 0,81,48,
                 48,81, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,81,48,
                 48,81,81,81,81, 0, 0,81,81,81,81,81,81,81,81,81,81,81,81,48,
                 48,48,48,48,48, 0, 0,48,48,48,48,48,48,48,48,48,48,48,48,48,
@@ -206,10 +206,10 @@ void Map::buildMesh() {
             float y1 = y0 + m_tileSize;
 
             uint32_t base = static_cast<uint32_t>(vertices.size());
-            vertices.push_back({{x0, y0}, {u0, v1}});
-            vertices.push_back({{x1, y0}, {u1, v1}});
-            vertices.push_back({{x1, y1}, {u1, v0}});
-            vertices.push_back({{x0, y1}, {u0, v0}});
+            vertices.push_back({{x0, y0}, {u0, v0}});
+            vertices.push_back({{x1, y0}, {u1, v0}});
+            vertices.push_back({{x1, y1}, {u1, v1}});
+            vertices.push_back({{x0, y1}, {u0, v1}});
             indices.push_back(base + 0);
             indices.push_back(base + 1);
             indices.push_back(base + 2);
