@@ -1,0 +1,46 @@
+#pragma once
+
+#include "Texture.h"
+#include <glm/glm.hpp>
+#include <array>
+#include <memory>
+
+class Engine;
+class Renderer;
+
+enum class Direction {
+    Front,
+    Back,
+    Left,
+    Right
+};
+
+class Player {
+public:
+    Player(Engine* engine, Renderer* renderer);
+    ~Player() = default;
+
+    void update(float deltaTime);
+    void render();
+
+    glm::vec2 position() const { return m_position; }
+    void setPosition(const glm::vec2& pos) { m_position = pos; }
+
+private:
+    Engine* m_engine;
+    Renderer* m_renderer;
+
+    glm::vec2 m_position{ 0.0f, 0.0f };
+    Direction m_direction = Direction::Front;
+    int m_frame = 0;
+    float m_animTimer = 0.0f;
+    bool m_moving = false;
+
+    static constexpr float MOVE_SPEED = 200.0f;
+    static constexpr float ANIM_SPEED = 0.15f;
+
+    std::array<std::array<std::unique_ptr<Texture>, 4>, 4> m_textures;
+
+    void loadTextures();
+    int directionIndex(Direction dir) const;
+};
