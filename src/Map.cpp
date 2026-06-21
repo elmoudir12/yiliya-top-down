@@ -68,6 +68,8 @@ void Map::load(const std::string& mapName) {
     m_tilesetCols = 8;
     m_groundTiles = std::move(tmx.groundTiles);
     m_collisionTiles = std::move(tmx.collisionTiles);
+    m_tileLayers = std::move(tmx.tileLayers);
+    m_collisionRects = std::move(tmx.collisionRects);
 
     const auto& meta = getMapMeta();
     auto it = meta.find(mapName);
@@ -80,34 +82,47 @@ void Map::load(const std::string& mapName) {
         m_spawnTileY = m_height / 2;
     }
 
-    buildMesh();
+    // Build mesh for each layer
+    m_layerMeshes.resize(m_tileLayers.size());
+    for (size_t i = 0; i < m_tileLayers.size(); ++i) {
+        buildMeshForLayer(m_tileLayers[i], m_layerMeshes[i]);
+    }
 }
 
 void Map::unload() {
-    VkDevice dev = m_engine->device();
-    if (m_indexBuffer) {
-        vkDestroyBuffer(dev, m_indexBuffer, nullptr);
-        m_indexBuffer = VK_NULL_HANDLE;
+    for (auto& mesh : m_layerMeshes) {
+        destroyMesh(mesh);
     }
-    if (m_indexBufferMemory) {
-        vkFreeMemory(dev, m_indexBufferMemory, nullptr);
-        m_indexBufferMemory = VK_NULL_HANDLE;
-    }
-    if (m_vertexBuffer) {
-        vkDestroyBuffer(dev, m_vertexBuffer, nullptr);
-        m_vertexBuffer = VK_NULL_HANDLE;
-    }
-    if (m_vertexBufferMemory) {
-        vkFreeMemory(dev, m_vertexBufferMemory, nullptr);
-        m_vertexBufferMemory = VK_NULL_HANDLE;
-    }
-    m_indexCount = 0;
+    m_layerMeshes.clear();
     m_groundTiles.clear();
     m_collisionTiles.clear();
+    m_tileLayers.clear();
+    m_collisionRects.clear();
     m_transitions.clear();
 }
 
-void Map::buildMesh() {
+void Map::destroyMesh(LayerMesh& mesh) {
+    VkDevice dev = m_engine->device();
+    if (mesh.indexBuffer) {
+        vkDestroyBuffer(dev, mesh.indexBuffer, nullptr);
+        mesh.indexBuffer = VK_NULL_HANDLE;
+    }
+    if (mesh.indexBufferMemory) {
+        vkFreeMemory(dev, mesh.indexBufferMemory, nullptr);
+        mesh.indexBufferMemory = VK_NULL_HANDLE;
+    }
+    if (mesh.vertexBuffer) {
+        vkDestroyBuffer(dev, mesh.vertexBuffer, nullptr);
+        mesh.vertexBuffer = VK_NULL_HANDLE;
+    }
+    if (mesh.vertexBufferMemory) {
+        vkFreeMemory(dev, mesh.vertexBufferMemory, nullptr);
+        mesh.vertexBufferMemory = VK_NULL_HANDLE;
+    }
+    mesh.indexCount = 0;
+}
+
+void Map::buildMeshForLayer(const std::vector<int>& tiles, LayerMesh& mesh) {
     int numTiles = m_width * m_height;
     if (numTiles == 0) return;
 
@@ -122,7 +137,9 @@ void Map::buildMesh() {
 
     for (int ty = 0; ty < m_height; ++ty) {
         for (int tx = 0; tx < m_width; ++tx) {
-            int tileIdx = m_groundTiles[ty * m_width + tx];
+            int tileIdx = tiles[ty * m_width + tx];
+            if (tileIdx == 324) continue;
+
             int srcCol = tileIdx % m_tilesetCols;
             int srcRow = tileIdx / m_tilesetCols;
 
@@ -150,7 +167,8 @@ void Map::buildMesh() {
         }
     }
 
-    m_indexCount = static_cast<uint32_t>(indices.size());
+    mesh.indexCount = static_cast<uint32_t>(indices.size());
+    if (mesh.indexCount == 0) return;
 
     VkDeviceSize vertexSize = sizeof(QuadVertex) * vertices.size();
     VkDeviceSize indexSize = sizeof(uint16_t) * indices.size();
@@ -158,21 +176,21 @@ void Map::buildMesh() {
     m_engine->createBuffer(vertexSize,
         VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        m_vertexBuffer, m_vertexBufferMemory);
+        mesh.vertexBuffer, mesh.vertexBufferMemory);
 
     void* data;
-    vkMapMemory(m_engine->device(), m_vertexBufferMemory, 0, vertexSize, 0, &data);
+    vkMapMemory(m_engine->device(), mesh.vertexBufferMemory, 0, vertexSize, 0, &data);
     memcpy(data, vertices.data(), vertexSize);
-    vkUnmapMemory(m_engine->device(), m_vertexBufferMemory);
+    vkUnmapMemory(m_engine->device(), mesh.vertexBufferMemory);
 
     m_engine->createBuffer(indexSize,
         VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        m_indexBuffer, m_indexBufferMemory);
+        mesh.indexBuffer, mesh.indexBufferMemory);
 
-    vkMapMemory(m_engine->device(), m_indexBufferMemory, 0, indexSize, 0, &data);
+    vkMapMemory(m_engine->device(), mesh.indexBufferMemory, 0, indexSize, 0, &data);
     memcpy(data, indices.data(), indexSize);
-    vkUnmapMemory(m_engine->device(), m_indexBufferMemory);
+    vkUnmapMemory(m_engine->device(), mesh.indexBufferMemory);
 }
 
 bool Map::isTileBlocked(int tileX, int tileY) const {
@@ -193,9 +211,11 @@ Map::Transition* Map::checkTransition(int tileX, int tileY) {
 }
 
 void Map::render() {
-    if (!m_tilesetTexture || m_indexCount == 0) return;
-    m_renderer->drawTilemap(m_tilesetTexture->descriptorSet(),
-        m_vertexBuffer, m_indexBuffer, m_indexCount);
+    if (!m_tilesetTexture) return;
+    for (auto& mesh : m_layerMeshes) {
+        if (mesh.indexCount > 0) {
+            m_renderer->drawTilemap(m_tilesetTexture->descriptorSet(),
+                mesh.vertexBuffer, mesh.indexBuffer, mesh.indexCount);
+        }
+    }
 }
-
-

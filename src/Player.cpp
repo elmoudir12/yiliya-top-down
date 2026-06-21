@@ -31,6 +31,12 @@ int Player::directionIndex(Direction dir) const {
     return 0;
 }
 
+static bool aabbOverlap(float ax, float ay, float aw, float ah,
+                         float bx, float by, float bw, float bh) {
+    return ax < bx + bw && ax + aw > bx &&
+           ay < by + bh && ay + ah > by;
+}
+
 bool Player::canMoveTo(float x, float y, const Map* map) const {
     if (!map) return true;
 
@@ -38,16 +44,33 @@ bool Player::canMoveTo(float x, float y, const Map* map) const {
     float halfW = PLAYER_WIDTH / 2.0f - 2.0f;
     float halfH = PLAYER_HEIGHT / 2.0f - 2.0f;
 
-    int tx1 = static_cast<int>((x - halfW)) / tileSize;
-    int ty1 = static_cast<int>((y - halfH)) / tileSize;
-    int tx2 = static_cast<int>((x + halfW - 1)) / tileSize;
-    int ty2 = static_cast<int>((y + halfH - 1)) / tileSize;
+    float playerLeft = x - halfW;
+    float playerTop = y - halfH;
+    float playerRight = x + halfW - 1;
+    float playerBottom = y + halfH - 1;
+
+    // Tile grid collision
+    int tx1 = static_cast<int>(playerLeft) / tileSize;
+    int ty1 = static_cast<int>(playerTop) / tileSize;
+    int tx2 = static_cast<int>(playerRight) / tileSize;
+    int ty2 = static_cast<int>(playerBottom) / tileSize;
 
     for (int ty = ty1; ty <= ty2; ++ty) {
         for (int tx = tx1; tx <= tx2; ++tx) {
             if (map->isTileBlocked(tx, ty)) return false;
         }
     }
+
+    // Rectangle collision from object layer
+    const auto& rects = map->collisionRects();
+    for (const auto& r : rects) {
+        if (aabbOverlap(playerLeft, playerTop,
+                        playerRight - playerLeft, playerBottom - playerTop,
+                        r.x, r.y, r.w, r.h)) {
+            return false;
+        }
+    }
+
     return true;
 }
 

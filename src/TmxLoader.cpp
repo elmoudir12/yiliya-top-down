@@ -6,6 +6,7 @@
 #include <zlib.h>
 #include <stdexcept>
 #include <algorithm>
+#include <cctype>
 
 static const std::string base64Chars =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -83,6 +84,65 @@ static std::string extractBetween(const std::string& xml, const std::string& ope
     return xml.substr(contentStart, close - contentStart);
 }
 
+static bool parseLayerData(const std::string& xml, size_t layerPos,
+                            int width, int height, int firstGid,
+                            std::vector<int>& outTiles) {
+    size_t dataStart = xml.find("<data", layerPos);
+    if (dataStart == std::string::npos) return false;
+
+    // Check encoding
+    size_t dataTagEnd = xml.find('>', dataStart);
+    if (dataTagEnd == std::string::npos) return false;
+    std::string tagContent = xml.substr(dataStart, dataTagEnd - dataStart);
+
+    int numTiles = width * height;
+    outTiles.assign(numTiles, 324);
+
+    bool isCsv = (tagContent.find("csv") != std::string::npos);
+
+    std::string rawData = extractBetween(xml, "<data", "</data>", layerPos);
+    if (rawData.empty()) return false;
+
+    if (isCsv) {
+        std::string cleaned;
+        for (char c : rawData) {
+            if (c == ',' || c == '\n' || c == '\r') {
+                cleaned += ' ';
+            } else {
+                cleaned += c;
+            }
+        }
+        std::istringstream stream(cleaned);
+        int idx = 0;
+        unsigned int val;
+        while (stream >> val && idx < numTiles) {
+            int rawGid = static_cast<int>(val);
+            int gid = rawGid & 0x1FFFFFFF;
+            if (gid == 0) {
+                outTiles[idx] = 324;
+            } else {
+                outTiles[idx] = gid - firstGid;
+            }
+            ++idx;
+        }
+        return idx == numTiles;
+    } else {
+        auto decoded = decodeBase64(rawData);
+        auto decompressed = decompressZlib(decoded);
+        if (static_cast<int>(decompressed.size()) < numTiles * 4) return false;
+        const uint32_t* gids = reinterpret_cast<const uint32_t*>(decompressed.data());
+        for (int i = 0; i < numTiles; ++i) {
+            int gid = static_cast<int>(gids[i] & 0x1FFFFFFF);
+            if (gid == 0) {
+                outTiles[i] = 324;
+            } else {
+                outTiles[i] = gid - firstGid;
+            }
+        }
+        return true;
+    }
+}
+
 bool loadTmx(const std::string& filepath, TmxMapData& out) {
     std::ifstream file(filepath);
     if (!file) return false;
@@ -101,74 +161,80 @@ bool loadTmx(const std::string& filepath, TmxMapData& out) {
     std::string gidStr = extractTagAttr(xml, "<tileset", "firstgid");
     int firstGid = gidStr.empty() ? 1 : std::stoi(gidStr);
 
-    // Find ground layer (name="ground" or id="1")
-    size_t groundPos = xml.find("name=\"ground\"");
-    if (groundPos == std::string::npos) {
-        groundPos = xml.find("id=\"1\"");
-    }
-
-    // Check if CSV or base64 encoding
-    size_t dataTagStart = xml.find("<data", groundPos);
-    bool isCsv = false;
-    if (dataTagStart != std::string::npos) {
-        size_t dataTagClose = xml.find('>', dataTagStart);
-        if (dataTagClose != std::string::npos) {
-            std::string tagContent = xml.substr(dataTagStart, dataTagClose - dataTagStart);
-            isCsv = (tagContent.find("csv") != std::string::npos);
-        }
-    }
-
-    std::string groundData = extractBetween(xml, "<data", "</data>", groundPos);
-    if (groundData.empty()) return false;
-
     int numTiles = out.width * out.height;
-    out.groundTiles.resize(numTiles);
 
-    if (isCsv) {
-        // Parse CSV format
-        std::string cleaned;
-        for (char c : groundData) {
-            if (c == ',' || c == '\n' || c == '\r') {
-                cleaned += ' ';
-            } else {
-                cleaned += c;
-            }
+    // Parse all tile layers
+    out.tileLayers.clear();
+    size_t searchPos = 0;
+    while (true) {
+        size_t layerPos = xml.find("<layer", searchPos);
+        if (layerPos == std::string::npos) break;
+
+        std::vector<int> layerTiles;
+        if (parseLayerData(xml, layerPos, out.width, out.height, firstGid, layerTiles)) {
+            out.tileLayers.push_back(std::move(layerTiles));
         }
-        std::istringstream stream(cleaned);
-        int idx = 0;
-        int val;
-        while (stream >> val && idx < numTiles) {
-            int gid = val;
-            if (gid == 0) {
-                out.groundTiles[idx] = 324;
-            } else {
-                out.groundTiles[idx] = gid - firstGid;
-            }
-            ++idx;
-        }
-        if (idx != numTiles) return false;
-    } else {
-        // Base64+zlib format
-        auto decoded = decodeBase64(groundData);
-        auto decompressed = decompressZlib(decoded);
-        if (static_cast<int>(decompressed.size()) < numTiles * 4) return false;
-        const uint32_t* gids = reinterpret_cast<const uint32_t*>(decompressed.data());
-        for (int i = 0; i < numTiles; ++i) {
-            int gid = static_cast<int>(gids[i]);
-            if (gid == 0) {
-                out.groundTiles[i] = 324;
-            } else {
-                out.groundTiles[i] = gid - firstGid;
-            }
-        }
+
+        searchPos = layerPos + 6;
     }
+
+    if (out.tileLayers.empty()) return false;
+
+    // First layer is ground
+    out.groundTiles = out.tileLayers[0];
 
     // Collision: derive from ground tiles
-    // tile 324 (void) and tile 96 (wall) are blocked
     out.collisionTiles.resize(numTiles);
     for (int i = 0; i < numTiles; ++i) {
         int t = out.groundTiles[i];
-        out.collisionTiles[i] = (t == 324 || t == 96) ? 1 : 0;
+        out.collisionTiles[i] = (t == 324 || t == 96 || t == 289 || t == 307) ? 1 : 0;
+    }
+
+    // Parse object groups for collision rectangles
+    out.collisionRects.clear();
+    searchPos = 0;
+    while (true) {
+        size_t objPos = xml.find("<objectgroup", searchPos);
+        if (objPos == std::string::npos) break;
+
+        size_t objGroupEnd = xml.find("</objectgroup>", objPos);
+        if (objGroupEnd == std::string::npos) break;
+
+        std::string groupContent = xml.substr(objPos, objGroupEnd - objPos);
+
+        // Parse each object in this group
+        size_t objSearch = 0;
+        while (true) {
+            size_t objStart = groupContent.find("<object", objSearch);
+            if (objStart == std::string::npos) break;
+
+            size_t objEnd = groupContent.find("/>", objStart);
+            if (objEnd == std::string::npos) {
+                objEnd = groupContent.find(">", objStart);
+                if (objEnd == std::string::npos) break;
+                objEnd = groupContent.find("</object>", objEnd);
+                if (objEnd == std::string::npos) break;
+            }
+
+            std::string objTag = groupContent.substr(objStart, objEnd - objStart + 2);
+
+            // Extract x, y, width, height
+            std::string xStr = extractTagAttr(objTag, "<object", "x");
+            std::string yStr = extractTagAttr(objTag, "<object", "y");
+            std::string wStr2 = extractTagAttr(objTag, "<object", "width");
+            std::string hStr2 = extractTagAttr(objTag, "<object", "height");
+
+            float x = xStr.empty() ? 0.0f : std::stof(xStr);
+            float y = yStr.empty() ? 0.0f : std::stof(yStr);
+            float w = wStr2.empty() ? 32.0f : std::stof(wStr2);
+            float h = hStr2.empty() ? 32.0f : std::stof(hStr2);
+
+            out.collisionRects.push_back({x, y, w, h});
+
+            objSearch = objEnd + 2;
+        }
+
+        searchPos = objGroupEnd + 14;
     }
 
     return true;

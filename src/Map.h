@@ -1,5 +1,6 @@
 #pragma once
 
+#include "TmxLoader.h"
 #include <vulkan/vulkan.h>
 #include <glm/glm.hpp>
 #include <string>
@@ -37,7 +38,17 @@ public:
     float worldWidth() const { return m_width * m_tileSize; }
     float worldHeight() const { return m_height * m_tileSize; }
 
+    const std::vector<CollisionRect>& collisionRects() const { return m_collisionRects; }
+
 private:
+    struct LayerMesh {
+        VkBuffer vertexBuffer = VK_NULL_HANDLE;
+        VkDeviceMemory vertexBufferMemory = VK_NULL_HANDLE;
+        VkBuffer indexBuffer = VK_NULL_HANDLE;
+        VkDeviceMemory indexBufferMemory = VK_NULL_HANDLE;
+        uint32_t indexCount = 0;
+    };
+
     Engine* m_engine;
     Renderer* m_renderer;
 
@@ -51,16 +62,14 @@ private:
 
     std::vector<int> m_groundTiles;
     std::vector<int> m_collisionTiles;
+    std::vector<std::vector<int>> m_tileLayers;
     std::vector<Transition> m_transitions;
+    std::vector<CollisionRect> m_collisionRects;
+    std::vector<LayerMesh> m_layerMeshes;
     int m_spawnTileX = 0, m_spawnTileY = 0;
 
     Texture* m_tilesetTexture = nullptr;
 
-    VkBuffer m_vertexBuffer = VK_NULL_HANDLE;
-    VkDeviceMemory m_vertexBufferMemory = VK_NULL_HANDLE;
-    VkBuffer m_indexBuffer = VK_NULL_HANDLE;
-    VkDeviceMemory m_indexBufferMemory = VK_NULL_HANDLE;
-    uint32_t m_indexCount = 0;
-
-    void buildMesh();
+    void buildMeshForLayer(const std::vector<int>& tiles, LayerMesh& mesh);
+    void destroyMesh(LayerMesh& mesh);
 };
