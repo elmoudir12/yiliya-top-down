@@ -1,8 +1,10 @@
 #include "Player.h"
 #include "Engine.h"
 #include "Renderer.h"
+#include "Map.h"
 #include <GLFW/glfw3.h>
 #include <string>
+#include <algorithm>
 
 Player::Player(Engine* engine, Renderer* renderer)
     : m_engine(engine), m_renderer(renderer) {
@@ -29,7 +31,27 @@ int Player::directionIndex(Direction dir) const {
     return 0;
 }
 
-void Player::update(float deltaTime) {
+bool Player::canMoveTo(float x, float y, const Map* map) const {
+    if (!map) return true;
+
+    int tileSize = map->tileSize();
+    float halfW = PLAYER_WIDTH / 2.0f - 2.0f;
+    float halfH = PLAYER_HEIGHT / 2.0f - 2.0f;
+
+    int tx1 = static_cast<int>((x - halfW)) / tileSize;
+    int ty1 = static_cast<int>((y - halfH)) / tileSize;
+    int tx2 = static_cast<int>((x + halfW - 1)) / tileSize;
+    int ty2 = static_cast<int>((y + halfH - 1)) / tileSize;
+
+    for (int ty = ty1; ty <= ty2; ++ty) {
+        for (int tx = tx1; tx <= tx2; ++tx) {
+            if (map->isTileBlocked(tx, ty)) return false;
+        }
+    }
+    return true;
+}
+
+void Player::update(float deltaTime, const Map* currentMap) {
     m_moving = false;
 
     bool wPressed = glfwGetKey(m_engine->window(), GLFW_KEY_W) == GLFW_PRESS;
@@ -37,21 +59,35 @@ void Player::update(float deltaTime) {
     bool aPressed = glfwGetKey(m_engine->window(), GLFW_KEY_A) == GLFW_PRESS;
     bool dPressed = glfwGetKey(m_engine->window(), GLFW_KEY_D) == GLFW_PRESS;
 
+    float step = MOVE_SPEED * deltaTime;
+
     if (wPressed) {
-        m_position.y += MOVE_SPEED * deltaTime;
-        m_moving = true;
+        float newY = m_position.y + step;
+        if (canMoveTo(m_position.x, newY, currentMap)) {
+            m_position.y = newY;
+            m_moving = true;
+        }
     }
     if (sPressed) {
-        m_position.y -= MOVE_SPEED * deltaTime;
-        m_moving = true;
+        float newY = m_position.y - step;
+        if (canMoveTo(m_position.x, newY, currentMap)) {
+            m_position.y = newY;
+            m_moving = true;
+        }
     }
     if (aPressed) {
-        m_position.x -= MOVE_SPEED * deltaTime;
-        m_moving = true;
+        float newX = m_position.x - step;
+        if (canMoveTo(newX, m_position.y, currentMap)) {
+            m_position.x = newX;
+            m_moving = true;
+        }
     }
     if (dPressed) {
-        m_position.x += MOVE_SPEED * deltaTime;
-        m_moving = true;
+        float newX = m_position.x + step;
+        if (canMoveTo(newX, m_position.y, currentMap)) {
+            m_position.x = newX;
+            m_moving = true;
+        }
     }
 
     if (sPressed && (dPressed || aPressed)) {

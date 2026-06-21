@@ -14,6 +14,8 @@ add_executable(yiliya_game
     src/Renderer.cpp
     src/Texture.cpp
     src/Player.cpp
+    src/Map.cpp
+    src/MapManager.cpp
 )
 
 target_include_directories(yiliya_game PRIVATE

@@ -13,6 +13,7 @@
 
 class Renderer;
 class Player;
+class MapManager;
 
 struct QueueFamilyIndices {
     std::optional<uint32_t> graphicsFamily;
@@ -59,9 +60,11 @@ public:
     VkCommandBuffer commandBuffer(uint32_t imageIndex) const { return m_commandBuffers[imageIndex]; }
     VkFramebuffer framebuffer(uint32_t imageIndex) const { return m_swapChainFramebuffers[imageIndex]; }
     Renderer* renderer() const { return m_renderer; }
-    float zoom() const { return m_zoom; }
     glm::vec2 cameraPos() const { return m_cameraPos; }
+    float getViewSize() const;
+    void setMapBounds(float worldW, float worldH) { m_mapWorldWidth = worldW; m_mapWorldHeight = worldH; }
     void recreateSwapChain();
+    void waitIdle() const { vkDeviceWaitIdle(m_device); }
 
     uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) const;
     VkFormat findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features) const;
@@ -114,11 +117,13 @@ private:
 
     uint32_t m_currentFrame = 0;
     bool m_framebufferResized = false;
-    float m_zoom = 1.0f;
     glm::vec2 m_cameraPos{ 0.0f, 0.0f };
+    float m_mapWorldWidth = 0.0f;
+    float m_mapWorldHeight = 0.0f;
 
     Renderer* m_renderer = nullptr;
     Player* m_player = nullptr;
+    MapManager* m_mapManager = nullptr;
 
     std::chrono::high_resolution_clock::time_point m_lastTime;
 

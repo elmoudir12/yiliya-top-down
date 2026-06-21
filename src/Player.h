@@ -7,6 +7,7 @@
 
 class Engine;
 class Renderer;
+class Map;
 
 enum class Direction {
     Front,
@@ -20,11 +21,14 @@ public:
     Player(Engine* engine, Renderer* renderer);
     ~Player() = default;
 
-    void update(float deltaTime);
+    void update(float deltaTime, const Map* currentMap);
     void render();
 
     glm::vec2 position() const { return m_position; }
     void setPosition(const glm::vec2& pos) { m_position = pos; }
+
+    static constexpr float PLAYER_WIDTH = 32.0f;
+    static constexpr float PLAYER_HEIGHT = 32.0f;
 
 private:
     Engine* m_engine;
@@ -36,11 +40,12 @@ private:
     float m_animTimer = 0.0f;
     bool m_moving = false;
 
-    static constexpr float MOVE_SPEED = 200.0f;
+    static constexpr float MOVE_SPEED = 160.0f;
     static constexpr float ANIM_SPEED = 0.15f;
 
     std::array<std::array<std::unique_ptr<Texture>, 4>, 4> m_textures;
 
     void loadTextures();
     int directionIndex(Direction dir) const;
+    bool canMoveTo(float x, float y, const Map* map) const;
 };

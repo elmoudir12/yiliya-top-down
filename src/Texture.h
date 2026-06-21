@@ -9,6 +9,7 @@ class Engine;
 class Texture {
 public:
     Texture(Engine* engine, const std::string& filepath);
+    Texture(Engine* engine, const void* pixelData, int width, int height);
     ~Texture();
 
     VkDescriptorSet descriptorSet() const { return m_descriptorSet; }

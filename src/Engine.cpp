@@ -1,6 +1,8 @@
 #include "Engine.h"
 #include "Renderer.h"
 #include "Player.h"
+#include "Map.h"
+#include "MapManager.h"
 #include <fstream>
 #include <stdexcept>
 #include <cstring>
@@ -42,12 +44,6 @@ void Engine::initWindow() {
         auto* engine = reinterpret_cast<Engine*>(glfwGetWindowUserPointer(window));
         if (engine) engine->m_framebufferResized = true;
     });
-    glfwSetScrollCallback(m_window, [](GLFWwindow* window, double xoffset, double yoffset) {
-        auto* engine = reinterpret_cast<Engine*>(glfwGetWindowUserPointer(window));
-        if (engine) {
-            engine->m_zoom = std::clamp(engine->m_zoom * (yoffset > 0 ? 1.1f : 1.0f / 1.1f), 0.1f, 10.0f);
-        }
-    });
 }
 
 void Engine::initVulkan() {
@@ -69,6 +65,18 @@ void Engine::initVulkan() {
     createSyncObjects();
 
     m_player = new Player(this, m_renderer);
+    m_mapManager = new MapManager(this, m_renderer, m_player);
+    m_mapManager->loadMap("player_house");
+}
+
+float Engine::getViewSize() const {
+    float defaultView = 360.0f;
+    if (m_mapWorldWidth <= 0 || m_mapWorldHeight <= 0) return defaultView;
+    VkExtent2D extent = m_swapChainExtent;
+    float aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
+    float fitH = m_mapWorldHeight / 2.0f;
+    float fitW = m_mapWorldWidth / (2.0f * aspect);
+    return std::min(defaultView, std::max(fitH, fitW));
 }
 
 void Engine::mainLoop() {
@@ -79,14 +87,37 @@ void Engine::mainLoop() {
         float deltaTime = std::chrono::duration<float>(now - m_lastTime).count();
         m_lastTime = now;
 
-        m_player->update(deltaTime);
-        m_cameraPos = m_player->position();
+        Map* currentMap = m_mapManager->currentMap();
+        if (!m_mapManager->isTransitioning() && currentMap) {
+            m_player->update(deltaTime, currentMap);
+        }
+
+        m_mapManager->update(deltaTime);
+        currentMap = m_mapManager->currentMap();
+
+        if (currentMap) {
+            float viewSize = getViewSize();
+            VkExtent2D extent = m_swapChainExtent;
+            float aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
+            float viewW = aspect * viewSize * 2.0f;
+            float viewH = viewSize * 2.0f;
+
+            m_cameraPos = m_player->position();
+            m_cameraPos.x = std::clamp(m_cameraPos.x, viewW / 2.0f, m_mapWorldWidth - viewW / 2.0f);
+            m_cameraPos.y = std::clamp(m_cameraPos.y, viewH / 2.0f, m_mapWorldHeight - viewH / 2.0f);
+
+            if (m_mapWorldWidth <= viewW) m_cameraPos.x = m_mapWorldWidth / 2.0f;
+            if (m_mapWorldHeight <= viewH) m_cameraPos.y = m_mapWorldHeight / 2.0f;
+        }
 
         if (glfwGetKey(m_window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
             glfwSetWindowShouldClose(m_window, GLFW_TRUE);
         }
 
         if (m_renderer->beginFrame()) {
+            if (currentMap) {
+                m_mapManager->render();
+            }
             m_player->render();
             m_renderer->endFrame();
         }
@@ -98,6 +129,7 @@ void Engine::mainLoop() {
 }
 
 void Engine::cleanup() {
+    delete m_mapManager;
     delete m_player;
     delete m_renderer;
 
@@ -435,7 +467,7 @@ void Engine::createGraphicsPipeline() {
     depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
     depthStencil.depthTestEnable = VK_TRUE;
     depthStencil.depthWriteEnable = VK_TRUE;
-    depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
+    depthStencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
     depthStencil.depthBoundsTestEnable = VK_FALSE;
     depthStencil.stencilTestEnable = VK_FALSE;
 

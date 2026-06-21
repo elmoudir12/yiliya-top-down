@@ -45,6 +45,7 @@ public:
 
     bool beginFrame();
     void drawSprite(VkDescriptorSet descriptorSet, const glm::vec2& position, const glm::vec2& scale, float rotation = 0.0f);
+    void drawTilemap(VkDescriptorSet descriptorSet, VkBuffer vertexBuffer, VkBuffer indexBuffer, uint32_t indexCount);
     void endFrame();
 
     VkDescriptorPool& descriptorPool() { return m_descriptorPool; }

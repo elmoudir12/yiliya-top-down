@@ -150,9 +150,8 @@ bool Renderer::beginFrame() {
     vkWaitForFences(m_engine->device(), 1, &fence, VK_TRUE, UINT64_MAX);
 
     VkExtent2D extent = m_engine->swapChainExtent();
-    float zoom = m_engine->zoom();
     float aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
-    float viewSize = 360.0f / zoom;
+    float viewSize = m_engine->getViewSize();
     float left = -aspect * viewSize;
     float right = aspect * viewSize;
 
@@ -178,7 +177,7 @@ bool Renderer::beginFrame() {
     renderPassInfo.renderArea.extent = extent;
 
     std::array<VkClearValue, 2> clearValues{};
-    clearValues[0].color = { {0.1f, 0.3f, 0.05f, 1.0f} };
+    clearValues[0].color = { {0.0f, 0.0f, 0.0f, 1.0f} };
     clearValues[1].depthStencil = { 1.0f, 0 };
     renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
     renderPassInfo.pClearValues = clearValues.data();
@@ -224,6 +223,28 @@ void Renderer::drawSprite(VkDescriptorSet descriptorSet, const glm::vec2& positi
         m_engine->pipelineLayout(), 1, 1, &descriptorSet, 0, nullptr);
 
     vkCmdDrawIndexed(m_currentCommandBuffer, static_cast<uint32_t>(quadIndices.size()), 1, 0, 0, 0);
+}
+
+void Renderer::drawTilemap(VkDescriptorSet descriptorSet, VkBuffer vertexBuffer, VkBuffer indexBuffer, uint32_t indexCount) {
+    glm::mat4 model(1.0f);
+    SpritePushConstants push{};
+    push.model = model;
+    vkCmdPushConstants(m_currentCommandBuffer, m_engine->pipelineLayout(),
+        VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(SpritePushConstants), &push);
+
+    vkCmdBindDescriptorSets(m_currentCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+        m_engine->pipelineLayout(), 1, 1, &descriptorSet, 0, nullptr);
+
+    VkBuffer vertexBuffers[] = { vertexBuffer };
+    VkDeviceSize offsets[] = { 0 };
+    vkCmdBindVertexBuffers(m_currentCommandBuffer, 0, 1, vertexBuffers, offsets);
+    vkCmdBindIndexBuffer(m_currentCommandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+
+    vkCmdDrawIndexed(m_currentCommandBuffer, indexCount, 1, 0, 0, 0);
+
+    VkBuffer defaultVertexBuffers[] = { m_vertexBuffer };
+    vkCmdBindVertexBuffers(m_currentCommandBuffer, 0, 1, defaultVertexBuffers, offsets);
+    vkCmdBindIndexBuffer(m_currentCommandBuffer, m_indexBuffer, 0, VK_INDEX_TYPE_UINT16);
 }
 
 void Renderer::endFrame() {

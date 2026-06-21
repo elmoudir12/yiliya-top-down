@@ -16,6 +16,38 @@ Texture::Texture(Engine* engine, const std::string& filepath)
     updateDescriptorSet();
 }
 
+Texture::Texture(Engine* engine, const void* pixelData, int width, int height)
+    : m_engine(engine) {
+    m_size = glm::vec2(width, height);
+    VkDeviceSize imageSize = width * height * 4;
+
+    VkBuffer stagingBuffer;
+    VkDeviceMemory stagingBufferMemory;
+    m_engine->createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        stagingBuffer, stagingBufferMemory);
+
+    void* data;
+    vkMapMemory(m_engine->device(), stagingBufferMemory, 0, imageSize, 0, &data);
+    memcpy(data, pixelData, imageSize);
+    vkUnmapMemory(m_engine->device(), stagingBufferMemory);
+
+    m_engine->createImage(width, height, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL,
+        VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_image, m_imageMemory);
+
+    m_engine->transitionImageLayout(m_image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    m_engine->copyBufferToImage(stagingBuffer, m_image, width, height);
+    m_engine->transitionImageLayout(m_image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+    vkDestroyBuffer(m_engine->device(), stagingBuffer, nullptr);
+    vkFreeMemory(m_engine->device(), stagingBufferMemory, nullptr);
+
+    createTextureImageView();
+    createTextureSampler();
+    updateDescriptorSet();
+}
+
 Texture::~Texture() {
     VkDevice dev = m_engine->device();
     if (m_descriptorSet) {
