@@ -1,6 +1,10 @@
 # Build directory
 build/
 
+# Raw sprite source folders (use assets/ version)
+yir/
+Yiliya/
+
 # IDE
 .vscode/
 .idea/
