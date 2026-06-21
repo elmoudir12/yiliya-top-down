@@ -65,7 +65,7 @@ void Map::load(const std::string& mapName) {
     m_width = tmx.width;
     m_height = tmx.height;
     m_tileSize = tmx.tileSize;
-    m_tilesetCols = 16;
+    m_tilesetCols = 8;
     m_groundTiles = std::move(tmx.groundTiles);
     m_collisionTiles = std::move(tmx.collisionTiles);
 

@@ -47,7 +47,7 @@ private:
     std::string m_mapName;
     int m_width = 0, m_height = 0;
     int m_tileSize = 32;
-    int m_tilesetCols = 16;
+    int m_tilesetCols = 8;
 
     std::vector<int> m_groundTiles;
     std::vector<int> m_collisionTiles;

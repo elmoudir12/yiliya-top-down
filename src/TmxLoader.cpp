@@ -107,42 +107,68 @@ bool loadTmx(const std::string& filepath, TmxMapData& out) {
         groundPos = xml.find("id=\"1\"");
     }
 
-    std::string groundData = extractBetween(xml, "<data", "</data>", groundPos);
-    if (groundData.empty()) return false;
-
-    std::string groundB64;
-    {
-        size_t ds = groundData.find('>');
-        if (ds != std::string::npos) {
-            groundB64 = groundData.substr(ds + 1);
-        } else {
-            groundB64 = groundData;
+    // Check if CSV or base64 encoding
+    size_t dataTagStart = xml.find("<data", groundPos);
+    bool isCsv = false;
+    if (dataTagStart != std::string::npos) {
+        size_t dataTagClose = xml.find('>', dataTagStart);
+        if (dataTagClose != std::string::npos) {
+            std::string tagContent = xml.substr(dataTagStart, dataTagClose - dataTagStart);
+            isCsv = (tagContent.find("csv") != std::string::npos);
         }
     }
 
-    auto decoded = decodeBase64(groundB64);
-    auto decompressed = decompressZlib(decoded);
+    std::string groundData = extractBetween(xml, "<data", "</data>", groundPos);
+    if (groundData.empty()) return false;
 
     int numTiles = out.width * out.height;
-    if (static_cast<int>(decompressed.size()) < numTiles * 4) return false;
-
     out.groundTiles.resize(numTiles);
-    const uint32_t* gids = reinterpret_cast<const uint32_t*>(decompressed.data());
-    for (int i = 0; i < numTiles; ++i) {
-        int gid = static_cast<int>(gids[i]);
-        if (gid == 0) {
-            out.groundTiles[i] = 48;
-        } else {
-            out.groundTiles[i] = gid - firstGid;
+
+    if (isCsv) {
+        // Parse CSV format
+        std::string cleaned;
+        for (char c : groundData) {
+            if (c == ',' || c == '\n' || c == '\r') {
+                cleaned += ' ';
+            } else {
+                cleaned += c;
+            }
+        }
+        std::istringstream stream(cleaned);
+        int idx = 0;
+        int val;
+        while (stream >> val && idx < numTiles) {
+            int gid = val;
+            if (gid == 0) {
+                out.groundTiles[idx] = 324;
+            } else {
+                out.groundTiles[idx] = gid - firstGid;
+            }
+            ++idx;
+        }
+        if (idx != numTiles) return false;
+    } else {
+        // Base64+zlib format
+        auto decoded = decodeBase64(groundData);
+        auto decompressed = decompressZlib(decoded);
+        if (static_cast<int>(decompressed.size()) < numTiles * 4) return false;
+        const uint32_t* gids = reinterpret_cast<const uint32_t*>(decompressed.data());
+        for (int i = 0; i < numTiles; ++i) {
+            int gid = static_cast<int>(gids[i]);
+            if (gid == 0) {
+                out.groundTiles[i] = 324;
+            } else {
+                out.groundTiles[i] = gid - firstGid;
+            }
         }
     }
 
     // Collision: derive from ground tiles
-    // tile 48 (void) and tile 81 (wall) are blocked
+    // tile 324 (void) and tile 96 (wall) are blocked
     out.collisionTiles.resize(numTiles);
     for (int i = 0; i < numTiles; ++i) {
         int t = out.groundTiles[i];
-        out.collisionTiles[i] = (t == 48 || t == 81) ? 1 : 0;
+        out.collisionTiles[i] = (t == 324 || t == 96) ? 1 : 0;
     }
 
     return true;
