@@ -73,6 +73,7 @@ private:
     Texture* m_tilesetTexture = nullptr;
 
     static constexpr float WALL_HEIGHT = 64.0f;
+    static constexpr float WALL_THICK = 32.0f;
 
     void buildMeshForLayer(const std::vector<int>& tiles, LayerMesh& mesh);
     void buildWalls();

@@ -211,8 +211,7 @@ void Map::buildWalls() {
     float hw = m_width * m_tileSize * 0.5f;
     float hh = m_height * m_tileSize * 0.5f;
     float wh = WALL_HEIGHT;
-    float thick = 32.0f; // one tile thick
-    float ext = 16.0f;   // extend past corners to overlap
+    float t = WALL_THICK;
 
     std::vector<QuadVertex> verts;
     std::vector<uint16_t> idxs;
@@ -230,87 +229,42 @@ void Map::buildWalls() {
         idxs.push_back(base + 2); idxs.push_back(base + 3); idxs.push_back(base + 0);
     };
 
-    // Each wall: inner face, outer face, top face
-    // UV: inner/outer use full vertical tile, top UV uses v1 as bottom (same tile stretched)
-    // The four walls are defined so inner face always faces into the room
+    // Each wall is a solid box (5 faces, no bottom since floor covers it).
+    // Walls overlap at corners by the full thickness so there are no gaps.
+    // Box definition: x0,x1 = X range, z0,z1 = Z range, y0=0, y1=wh.
+    // Faces: +X, -X, +Z, -Z, top.
 
-    // North wall (z = -hh), extends from (-hw-ext, hw+ext)
-    {
-        float ix0 = -hw - ext, ix1 = hw + ext, iz = -hh;
-        float oz = -hh - thick;
-        // inner face (facing +Z into room)
-        addQuad({ix0, 0.0f, iz}, {ix1, 0.0f, iz}, {ix1, wh, iz}, {ix0, wh, iz},
-                0.0f, 1.0f, 1.0f, 0.0f, v0, v0, v1, v1);
-        // outer face (facing -Z)
-        addQuad({ix1, 0.0f, oz}, {ix0, 0.0f, oz}, {ix0, wh, oz}, {ix1, wh, oz},
-                0.0f, 1.0f, 1.0f, 0.0f, v0, v0, v1, v1);
-        // top face
-        addQuad({ix0, wh, oz}, {ix1, wh, oz}, {ix1, wh, iz}, {ix0, wh, iz},
-                0.0f, 1.0f, 1.0f, 0.0f, v0, v0, v1, v1);
-        // west end cap
-        addQuad({ix0, 0.0f, oz}, {ix0, 0.0f, iz}, {ix0, wh, iz}, {ix0, wh, oz},
-                0.0f, 1.0f, 1.0f, 0.0f, v0, v0, v1, v1);
-        // east end cap
-        addQuad({ix1, 0.0f, iz}, {ix1, 0.0f, oz}, {ix1, wh, oz}, {ix1, wh, iz},
-                0.0f, 1.0f, 1.0f, 0.0f, v0, v0, v1, v1);
-    }
+    struct WallBox { float x0, x1, z0, z1; };
+    WallBox walls[4] = {
+        // north: extends past east and west edges by t
+        {-hw - t, hw + t, -hh - t, -hh},
+        // south
+        {-hw - t, hw + t,  hh,      hh + t},
+        // west
+        {-hw - t, -hw,     -hh - t, hh + t},
+        // east
+        { hw,     hw + t,  -hh - t, hh + t},
+    };
 
-    // South wall (z = hh)
-    {
-        float ix0 = hw + ext, ix1 = -hw - ext, iz = hh;
-        float oz = hh + thick;
-        addQuad({ix0, 0.0f, iz}, {ix1, 0.0f, iz}, {ix1, wh, iz}, {ix0, wh, iz},
-                0.0f, 1.0f, 1.0f, 0.0f, v0, v0, v1, v1);
-        addQuad({ix1, 0.0f, oz}, {ix0, 0.0f, oz}, {ix0, wh, oz}, {ix1, wh, oz},
-                0.0f, 1.0f, 1.0f, 0.0f, v0, v0, v1, v1);
-        addQuad({ix0, wh, oz}, {ix1, wh, oz}, {ix1, wh, iz}, {ix0, wh, iz},
-                0.0f, 1.0f, 1.0f, 0.0f, v0, v0, v1, v1);
-        // west end cap
-        addQuad({ix0, 0.0f, iz}, {ix0, 0.0f, oz}, {ix0, wh, oz}, {ix0, wh, iz},
-                0.0f, 1.0f, 1.0f, 0.0f, v0, v0, v1, v1);
-        // east end cap
-        addQuad({ix1, 0.0f, oz}, {ix1, 0.0f, iz}, {ix1, wh, iz}, {ix1, wh, oz},
-                0.0f, 1.0f, 1.0f, 0.0f, v0, v0, v1, v1);
-    }
+    for (int i = 0; i < 4; ++i) {
+        auto& w = walls[i];
+        float x0 = w.x0, x1 = w.x1, z0 = w.z0, z1 = w.z1;
 
-    // West wall (x = -hw)
-    {
-        float iz0 = hh + ext, iz1 = -hh - ext, ix = -hw, ox = ix - thick;
-        // inner face (facing +X into room)
-        addQuad({ix, 0.0f, iz0}, {ix, 0.0f, iz1}, {ix, wh, iz1}, {ix, wh, iz0},
-                0.0f, 1.0f, 1.0f, 0.0f, v0, v0, v1, v1);
-        // outer face (facing -X)
-        addQuad({ox, 0.0f, iz0}, {ox, 0.0f, iz1}, {ox, wh, iz1}, {ox, wh, iz0},
-                0.0f, 1.0f, 1.0f, 0.0f, v0, v0, v1, v1);
-        // top face
-        addQuad({ox, wh, iz0}, {ix, wh, iz0}, {ix, wh, iz1}, {ox, wh, iz1},
-                0.0f, 1.0f, 1.0f, 0.0f, v0, v0, v1, v1);
-        // north end cap (facing -Z)
-        addQuad({ix, 0.0f, iz1}, {ox, 0.0f, iz1}, {ox, wh, iz1}, {ix, wh, iz1},
-                0.0f, 1.0f, 1.0f, 0.0f, v0, v0, v1, v1);
-        // south end cap (facing +Z)
-        addQuad({ox, 0.0f, iz0}, {ix, 0.0f, iz0}, {ix, wh, iz0}, {ox, wh, iz0},
-                0.0f, 1.0f, 1.0f, 0.0f, v0, v0, v1, v1);
-    }
-
-    // East wall (x = hw)
-    {
-        float iz0 = -hh - ext, iz1 = hh + ext, ix = hw, ox = ix + thick;
-        // inner face (facing -X into room)
-        addQuad({ix, 0.0f, iz0}, {ix, 0.0f, iz1}, {ix, wh, iz1}, {ix, wh, iz0},
-                0.0f, 1.0f, 1.0f, 0.0f, v0, v0, v1, v1);
-        // outer face (facing +X)
-        addQuad({ox, 0.0f, iz0}, {ox, 0.0f, iz1}, {ox, wh, iz1}, {ox, wh, iz0},
-                0.0f, 1.0f, 1.0f, 0.0f, v0, v0, v1, v1);
-        // top face
-        addQuad({ix, wh, iz0}, {ox, wh, iz0}, {ox, wh, iz1}, {ix, wh, iz1},
-                0.0f, 1.0f, 1.0f, 0.0f, v0, v0, v1, v1);
-        // north end cap (facing -Z)
-        addQuad({ox, 0.0f, iz0}, {ix, 0.0f, iz0}, {ix, wh, iz0}, {ox, wh, iz0},
-                0.0f, 1.0f, 1.0f, 0.0f, v0, v0, v1, v1);
-        // south end cap (facing +Z)
-        addQuad({ix, 0.0f, iz1}, {ox, 0.0f, iz1}, {ox, wh, iz1}, {ix, wh, iz1},
-                0.0f, 1.0f, 1.0f, 0.0f, v0, v0, v1, v1);
+        // +X face (if wall extends in +X direction — east face of box)
+        addQuad({x1, 0, z0}, {x1, 0, z1}, {x1, wh, z1}, {x1, wh, z0},
+                0, 1, 1, 0, v0, v0, v1, v1);
+        // -X face
+        addQuad({x0, 0, z1}, {x0, 0, z0}, {x0, wh, z0}, {x0, wh, z1},
+                0, 1, 1, 0, v0, v0, v1, v1);
+        // +Z face
+        addQuad({x1, 0, z1}, {x0, 0, z1}, {x0, wh, z1}, {x1, wh, z1},
+                0, 1, 1, 0, v0, v0, v1, v1);
+        // -Z face
+        addQuad({x0, 0, z0}, {x1, 0, z0}, {x1, wh, z0}, {x0, wh, z0},
+                0, 1, 1, 0, v0, v0, v1, v1);
+        // top face (+Y)
+        addQuad({x0, wh, z1}, {x1, wh, z1}, {x1, wh, z0}, {x0, wh, z0},
+                0, 1, 1, 0, v0, v0, v1, v1);
     }
 
     m_wallMesh.indexCount = static_cast<uint32_t>(idxs.size());
