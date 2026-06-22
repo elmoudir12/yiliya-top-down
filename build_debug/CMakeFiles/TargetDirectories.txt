@@ -1,3 +1,0 @@
-/home/yiliya/Downloads/TOP DOWN 2D GAME/build_debug/CMakeFiles/yiliya_game.dir
-/home/yiliya/Downloads/TOP DOWN 2D GAME/build_debug/CMakeFiles/edit_cache.dir
-/home/yiliya/Downloads/TOP DOWN 2D GAME/build_debug/CMakeFiles/rebuild_cache.dir

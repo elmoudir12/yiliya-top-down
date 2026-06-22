@@ -14,7 +14,6 @@
 class Renderer;
 class Player;
 class MapManager;
-class LightManager;
 
 struct QueueFamilyIndices {
     std::optional<uint32_t> graphicsFamily;
@@ -53,9 +52,6 @@ public:
     VkExtent2D swapChainExtent() const { return m_swapChainExtent; }
     GLFWwindow* window() const { return m_window; }
     VkSwapchainKHR swapChain() const { return m_swapChain; }
-    VkFormat swapChainImageFormat() const { return m_swapChainImageFormat; }
-    uint32_t swapChainImageCount() const { return static_cast<uint32_t>(m_swapChainImages.size()); }
-    VkFormat depthFormat() const { return m_depthFormat; }
     VkQueue graphicsQueue() const { return m_graphicsQueue; }
     VkQueue presentQueue() const { return m_presentQueue; }
     VkSemaphore imageAvailableSemaphore() const { return m_imageAvailableSemaphores[m_currentFrame]; }
@@ -118,7 +114,6 @@ private:
     VkImage m_depthImage = VK_NULL_HANDLE;
     VkDeviceMemory m_depthImageMemory = VK_NULL_HANDLE;
     VkImageView m_depthImageView = VK_NULL_HANDLE;
-    VkFormat m_depthFormat = VK_FORMAT_UNDEFINED;
 
     uint32_t m_currentFrame = 0;
     bool m_framebufferResized = false;
@@ -129,7 +124,6 @@ private:
     Renderer* m_renderer = nullptr;
     Player* m_player = nullptr;
     MapManager* m_mapManager = nullptr;
-    LightManager* m_lightManager = nullptr;
 
     std::chrono::high_resolution_clock::time_point m_lastTime;
 
@@ -169,8 +163,6 @@ private:
     static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData);
     void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo);
     bool checkValidationLayerSupport();
-
-public:
     VkShaderModule createShaderModule(const std::vector<char>& code);
 };
 

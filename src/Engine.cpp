@@ -3,7 +3,6 @@
 #include "Player.h"
 #include "Map.h"
 #include "MapManager.h"
-#include "LightManager.h"
 #include <fstream>
 #include <stdexcept>
 #include <cstring>
@@ -58,15 +57,14 @@ void Engine::initVulkan() {
     createRenderPass();
     createDescriptorSetLayout();
     createCommandPool();
-    createDepthResources();
     m_renderer = new Renderer(this);
     createGraphicsPipeline();
+    createDepthResources();
     createFramebuffers();
     createCommandBuffers();
     createSyncObjects();
 
     m_player = new Player(this, m_renderer);
-    m_lightManager = new LightManager(this, m_renderer);
     m_mapManager = new MapManager(this, m_renderer, m_player);
     m_mapManager->loadMap("player_house");
 }
@@ -117,38 +115,10 @@ void Engine::mainLoop() {
         }
 
         if (m_renderer->beginFrame()) {
-            m_renderer->cmdBeginScenePass();
-
             if (currentMap) {
                 m_mapManager->render();
             }
             m_player->render();
-
-            if (currentMap) {
-                // Per-room lighting setup
-                std::string mapId = currentMap->mapId();
-                if (mapId == "player_house") {
-                    m_lightManager->setAmbient(glm::vec3(0.15f, 0.12f, 0.10f), 1.0f);
-                    m_lightManager->clearLights();
-                    // Window light (warm)
-                    m_lightManager->addLight({glm::vec2(112, 80), glm::vec3(1.0f, 0.7f, 0.3f), 140.0f, 0.8f});
-                    // Exit/door light
-                    m_lightManager->addLight({glm::vec2(176, 464), glm::vec3(0.6f, 0.5f, 0.4f), 100.0f, 0.5f});
-                } else if (mapId == "town_center") {
-                    // Outdoor: bright ambient
-                    m_lightManager->setAmbient(glm::vec3(0.6f, 0.55f, 0.5f), 1.0f);
-                    m_lightManager->clearLights();
-                } else {
-                    m_lightManager->setAmbient(glm::vec3(0.3f, 0.3f, 0.3f), 1.0f);
-                    m_lightManager->clearLights();
-                }
-            }
-
-            m_renderer->cmdBeginLightPass(m_lightManager->ambientColor(), m_lightManager->ambientIntensity());
-            m_lightManager->renderLights(currentMap);
-            m_lightManager->renderShadows(currentMap);
-
-            m_renderer->cmdComposite();
             m_renderer->endFrame();
         }
 
@@ -160,7 +130,6 @@ void Engine::mainLoop() {
 
 void Engine::cleanup() {
     delete m_mapManager;
-    delete m_lightManager;
     delete m_player;
     delete m_renderer;
 
@@ -616,7 +585,6 @@ void Engine::createDepthResources() {
         {VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT},
         VK_IMAGE_TILING_OPTIMAL, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
 
-    m_depthFormat = depthFormat;
     createImage(m_swapChainExtent.width, m_swapChainExtent.height, depthFormat,
         VK_IMAGE_TILING_OPTIMAL,
         VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
@@ -668,7 +636,6 @@ void Engine::recreateSwapChain() {
     }
 
     vkDeviceWaitIdle(m_device);
-    m_renderer->destroyLightingResources();
     cleanupSwapChain();
 
     createSwapChain();
@@ -676,8 +643,6 @@ void Engine::recreateSwapChain() {
     createDepthResources();
     createFramebuffers();
     createCommandBuffers();
-
-    m_renderer->createLightingResources();
 }
 
 void Engine::cleanupSwapChain() {
