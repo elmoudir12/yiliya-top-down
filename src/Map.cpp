@@ -237,7 +237,7 @@ static const std::unordered_map<std::string, MapMeta>& getMapMeta() {
         }},
         {"front_yard", {
             25, 18, 0, 13,
-            {{8, 17, 5, 1, "player_house", 5, 8}},
+            {{8, 0, 5, 1, "player_house", 5, 8}},
             borderGrid({25, 18}),
             12, 8, false, true,
             {{2,2},{2,15},{6,2},{6,15},{10,2},{14,2},{18,2},{22,2},
