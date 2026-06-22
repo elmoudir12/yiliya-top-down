@@ -1,10 +1,13 @@
 #pragma once
 
-#include "TmxLoader.h"
 #include <vulkan/vulkan.h>
 #include <glm/glm.hpp>
 #include <string>
 #include <vector>
+
+struct CollisionRect {
+    float x, y, w, h;
+};
 
 class Engine;
 class Renderer;
@@ -40,7 +43,6 @@ public:
 
     const std::vector<CollisionRect>& collisionRects() const { return m_collisionRects; }
     const std::vector<CollisionRect>& wallCollisionRects() const { return m_wallCollisionRects; }
-    const std::vector<int>& groundTiles() const { return m_groundTiles; }
 
     static constexpr float wallHeight() { return WALL_HEIGHT; }
     static constexpr float wallThick() { return WALL_THICK; }
@@ -57,17 +59,11 @@ private:
     Engine* m_engine;
     Renderer* m_renderer;
 
-    static Texture* s_tilesetTexture;
-    static int s_tilesetRefCount;
-
     std::string m_mapName;
     int m_width = 0, m_height = 0;
     int m_tileSize = 32;
-    int m_tilesetCols = 8;
 
-    std::vector<int> m_groundTiles;
-    std::vector<int> m_collisionTiles;
-    std::vector<std::vector<int>> m_tileLayers;
+    std::vector<uint8_t> m_collisionGrid;
     std::vector<Transition> m_transitions;
     std::vector<CollisionRect> m_collisionRects;
     std::vector<CollisionRect> m_wallCollisionRects;
@@ -78,7 +74,6 @@ private:
     LayerMesh m_floorBottomMesh;
     int m_spawnTileX = 0, m_spawnTileY = 0;
 
-    Texture* m_tilesetTexture = nullptr;
     Texture* m_wallTexture = nullptr;
     Texture* m_floorTexture = nullptr;
 

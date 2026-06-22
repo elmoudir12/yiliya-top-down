@@ -2,17 +2,12 @@
 #include "Engine.h"
 #include "Renderer.h"
 #include "Texture.h"
-#include "TmxLoader.h"
 
 #include <cstring>
 #include <stdexcept>
 #include <unordered_map>
 #include <algorithm>
-
-Texture* Map::s_tilesetTexture = nullptr;
-int Map::s_tilesetRefCount = 0;
-
-static const int TILE_PX = 32;
+#include <cstdint>
 
 static Texture* createWoodFloorTexture(Engine* engine) {
     const int S = 32;
@@ -126,21 +121,36 @@ static Texture* createTimberTexture(Engine* engine) {
 }
 
 struct MapMeta {
+    int width, height;
     std::vector<Map::Transition> transitions;
+    std::vector<uint8_t> blocked;
     int spawnTileX, spawnTileY;
+    bool walls = true;
 };
 
 static const std::unordered_map<std::string, MapMeta>& getMapMeta() {
+    // Helper: generate a border-blocked collision grid
+    struct Grid { int w, h; };
+    auto borderGrid = [](Grid g) {
+        std::vector<uint8_t> v(g.w * g.h, 0);
+        for (int y = 0; y < g.h; ++y)
+            for (int x = 0; x < g.w; ++x)
+                if (x == 0 || x == g.w - 1 || y == 0 || y == g.h - 1)
+                    v[y * g.w + x] = 1;
+        return v;
+    };
     static const std::unordered_map<std::string, MapMeta> meta = {
         {"player_house", {
-            .transitions = {{4, 10, 2, 1, "town_center", 12, 2}},
-            .spawnTileX = 4,
-            .spawnTileY = 4,
+            14, 11,
+            {{4, 10, 2, 1, "front_yard", 12, 2}},
+            std::vector<uint8_t>(14 * 11, 0),
+            4, 4,
         }},
-        {"town_center", {
-            .transitions = {{8, 17, 5, 1, "player_house", 5, 8}},
-            .spawnTileX = 12,
-            .spawnTileY = 8,
+        {"front_yard", {
+            25, 18,
+            {{8, 17, 5, 1, "player_house", 5, 8}},
+            borderGrid({25, 18}),
+            12, 8, false,
         }},
     };
     return meta;
@@ -148,52 +158,30 @@ static const std::unordered_map<std::string, MapMeta>& getMapMeta() {
 
 Map::Map(Engine* engine, Renderer* renderer)
     : m_engine(engine), m_renderer(renderer) {
-    if (!s_tilesetTexture) {
-        s_tilesetTexture = new Texture(m_engine, "assets/tiles/tileset.png");
-        s_tilesetTexture->setAddressMode(VK_SAMPLER_ADDRESS_MODE_REPEAT, VK_SAMPLER_ADDRESS_MODE_REPEAT);
-    }
-    ++s_tilesetRefCount;
-    m_tilesetTexture = s_tilesetTexture;
 }
 
 Map::~Map() {
     unload();
-    --s_tilesetRefCount;
-    if (s_tilesetRefCount <= 0 && s_tilesetTexture) {
-        delete s_tilesetTexture;
-        s_tilesetTexture = nullptr;
-    }
 }
 
 void Map::load(const std::string& mapName) {
-    m_tilesetTexture = s_tilesetTexture;
-
-    std::string tmxPath = "maps/" + mapName + ".tmx";
-    TmxMapData tmx;
-    if (!loadTmx(tmxPath, tmx)) {
-        throw std::runtime_error("Failed to load TMX: " + tmxPath);
-    }
-
     m_mapName = mapName;
-    m_width = tmx.width;
-    m_height = tmx.height;
-    m_tileSize = tmx.tileSize;
-    m_tilesetCols = 8;
-    m_groundTiles = std::move(tmx.groundTiles);
-    m_collisionTiles = std::move(tmx.collisionTiles);
-    m_tileLayers = std::move(tmx.tileLayers);
-    m_collisionRects = std::move(tmx.collisionRects);
 
     const auto& meta = getMapMeta();
     auto it = meta.find(mapName);
-    if (it != meta.end()) {
-        m_transitions = it->second.transitions;
-        m_spawnTileX = it->second.spawnTileX;
-        m_spawnTileY = it->second.spawnTileY;
-    } else {
-        m_spawnTileX = m_width / 2;
-        m_spawnTileY = m_height / 2;
-    }
+    if (it == meta.end())
+        throw std::runtime_error("Unknown map: " + mapName);
+
+    m_width = it->second.width;
+    m_height = it->second.height;
+    m_tileSize = 32;
+    m_transitions = it->second.transitions;
+    m_spawnTileX = it->second.spawnTileX;
+    m_spawnTileY = it->second.spawnTileY;
+    m_collisionGrid = it->second.blocked;
+
+    if (static_cast<int>(m_collisionGrid.size()) != m_width * m_height)
+        throw std::runtime_error("Collision grid size mismatch for map: " + mapName);
 
     if (!m_wallTexture) {
         m_wallTexture = createTimberTexture(m_engine);
@@ -202,7 +190,6 @@ void Map::load(const std::string& mapName) {
         m_floorTexture = createWoodFloorTexture(m_engine);
     }
 
-    // Compute door gaps from transitions that touch a map edge
     m_doorGaps.clear();
     {
         float hw2 = m_width * m_tileSize * 0.5f;
@@ -213,19 +200,20 @@ void Map::load(const std::string& mapName) {
             float z0 = t.tileY * m_tileSize - hh2;
             float z1 = (t.tileY + t.tileH) * m_tileSize - hh2;
             if (t.tileY + t.tileH >= m_height)
-                m_doorGaps.push_back({1, x0, x1}); // south
+                m_doorGaps.push_back({1, x0, x1});
             if (t.tileY <= 0)
-                m_doorGaps.push_back({0, x0, x1}); // north
+                m_doorGaps.push_back({0, x0, x1});
             if (t.tileX + t.tileW >= m_width)
-                m_doorGaps.push_back({3, z0, z1}); // east
+                m_doorGaps.push_back({3, z0, z1});
             if (t.tileX <= 0)
-                m_doorGaps.push_back({2, z0, z1}); // west
+                m_doorGaps.push_back({2, z0, z1});
         }
     }
 
     buildFloorTop();
     buildFloorBottom();
-    buildWalls();
+    if (it->second.walls)
+        buildWalls();
 }
 
 void Map::unload() {
@@ -240,9 +228,7 @@ void Map::unload() {
         delete m_wallTexture;
         m_wallTexture = nullptr;
     }
-    m_groundTiles.clear();
-    m_collisionTiles.clear();
-    m_tileLayers.clear();
+    m_collisionGrid.clear();
     m_collisionRects.clear();
     m_wallCollisionRects.clear();
     m_doorGaps.clear();
@@ -475,7 +461,7 @@ bool Map::isTileBlocked(int tileX, int tileY) const {
     if (tileX < 0 || tileX >= m_width || tileY < 0 || tileY >= m_height) {
         return true;
     }
-    return m_collisionTiles[tileY * m_width + tileX] != 0;
+    return m_collisionGrid[tileY * m_width + tileX] != 0;
 }
 
 Map::Transition* Map::checkTransition(int tileX, int tileY) {
@@ -489,7 +475,6 @@ Map::Transition* Map::checkTransition(int tileX, int tileY) {
 }
 
 void Map::render() {
-    if (!m_tilesetTexture) return;
     if (m_floorTopMesh.indexCount > 0 && m_floorTexture) {
         m_renderer->drawTilemap(m_floorTexture->descriptorSet(),
             m_floorTopMesh.vertexBuffer, m_floorTopMesh.indexBuffer,
