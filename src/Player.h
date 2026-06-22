@@ -51,5 +51,9 @@ private:
     void loadTextures();
     int directionIndex(Direction dir) const;
     bool canMoveTo(float x, float z, const Map* map) const;
+    void resolveCollisions(const Map* map);
+    void getBounds(float x, float z, const Map* map,
+                   float& outLeft, float& outTop,
+                   float& outRight, float& outBottom) const;
     Direction idleDirection() const;
 };

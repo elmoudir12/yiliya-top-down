@@ -38,40 +38,41 @@ static bool aabbOverlap(float ax, float ay, float aw, float ah,
            ay < by + bh && ay + ah > by;
 }
 
-bool Player::canMoveTo(float x, float z, const Map* map) const {
-    if (!map) return true;
-
+void Player::getBounds(float x, float z, const Map* map,
+                       float& outLeft, float& outTop,
+                       float& outRight, float& outBottom) const {
     float hw = map->width() * map->tileSize() * 0.5f;
     float hh = map->height() * map->tileSize() * 0.5f;
-    float tileSize = static_cast<float>(map->tileSize());
-
-    // Pixel-perfect bounds from current sprite frame
     auto& tex = m_textures[directionIndex(m_direction)][m_frame];
     glm::vec4 vb = tex->visibleBounds();
     float texW = tex->size().x;
-    float scale = 64.0f / texW;  // quad is 64 world-units wide regardless of texel size
+    float scale = 64.0f / texW;
+    float halfWorld = texW * scale * 0.5f;
 
     float tx = x + hw;
     float ty = z + hh;
-    float halfWorld = texW * scale * 0.5f;
+    outLeft   = tx - halfWorld + vb.x * scale;
+    outTop    = ty - halfWorld + vb.y * scale;
+    outRight  = tx - halfWorld + vb.z * scale;
+    outBottom = ty - halfWorld + vb.w * scale;
+}
 
-    float playerLeft   = tx - halfWorld + vb.x * scale;
-    float playerTop    = ty - halfWorld + vb.y * scale;
-    float playerRight  = tx - halfWorld + vb.z * scale;
-    float playerBottom = ty - halfWorld + vb.w * scale;
+bool Player::canMoveTo(float x, float z, const Map* map) const {
+    if (!map) return true;
 
-    // Tile grid collision (clamped to map bounds — OOB tiles are skipped)
+    float tileSize = static_cast<float>(map->tileSize());
+
+    float playerLeft, playerTop, playerRight, playerBottom;
+    getBounds(x, z, map, playerLeft, playerTop, playerRight, playerBottom);
+
+    // Tile grid collision
     int tx1 = static_cast<int>(playerLeft) / static_cast<int>(tileSize);
     int ty1 = static_cast<int>(playerTop) / static_cast<int>(tileSize);
     int tx2 = static_cast<int>(playerRight) / static_cast<int>(tileSize);
     int ty2 = static_cast<int>(playerBottom) / static_cast<int>(tileSize);
-    int ttx1 = std::max(0, tx1);
-    int tty1 = std::max(0, ty1);
-    int ttx2 = std::min(map->width() - 1, tx2);
-    int tty2 = std::min(map->height() - 1, ty2);
 
-    for (int tty = tty1; tty <= tty2; ++tty) {
-        for (int ttx = ttx1; ttx <= ttx2; ++ttx) {
+    for (int tty = ty1; tty <= ty2; ++tty) {
+        for (int ttx = tx1; ttx <= tx2; ++ttx) {
             if (map->isTileBlocked(ttx, tty)) return false;
         }
     }
@@ -87,6 +88,50 @@ bool Player::canMoveTo(float x, float z, const Map* map) const {
     }
 
     return true;
+}
+
+// Push player out of any overlapping collision rect along the shortest axis.
+// The player is INSIDE the rect; we find which side they're closest to
+// (smallest overlap) and push them out that direction.
+void Player::resolveCollisions(const Map* map) {
+    if (!map) return;
+    const auto& rects = map->collisionRects();
+    if (rects.empty()) return;
+
+    for (int iter = 0; iter < 4; ++iter) {
+        float playerLeft, playerTop, playerRight, playerBottom;
+        getBounds(m_position.x, m_position.z, map,
+                  playerLeft, playerTop, playerRight, playerBottom);
+
+        bool anyOverlap = false;
+        for (const auto& r : rects) {
+            if (!aabbOverlap(playerLeft, playerTop,
+                             playerRight - playerLeft, playerBottom - playerTop,
+                             r.x, r.y, r.w, r.h)) continue;
+            anyOverlap = true;
+
+            // Player is inside the rect. Compute push distance to escape each side.
+            // Sign convention: positive delta_x moves player RIGHT (larger x),
+            // positive delta_z moves player DOWN (larger z in tile Y space).
+            float pushLeft   = r.x - playerRight;          // negative: escape left
+            float pushRight  = (r.x + r.w) - playerLeft;   // positive: escape right
+            float pushUp     = r.y - playerBottom;         // negative: escape up (smaller z)
+            float pushDown   = (r.y + r.h) - playerTop;    // positive: escape down (larger z)
+
+            // Choose smallest magnitude push along each axis
+            float axPush = (std::abs(pushLeft) < std::abs(pushRight)) ? pushLeft : pushRight;
+            float axPushZ = (std::abs(pushUp) < std::abs(pushDown)) ? pushUp : pushDown;
+
+            // Pick the smaller-magnitude axis
+            if (std::abs(axPush) < std::abs(axPushZ)) {
+                m_position.x += axPush;
+            } else {
+                m_position.z += axPushZ;
+            }
+            break; // restart with updated bounds
+        }
+        if (!anyOverlap) break;
+    }
 }
 
 void Player::update(float deltaTime, const Map* currentMap) {
@@ -132,13 +177,8 @@ void Player::update(float deltaTime, const Map* currentMap) {
         }
     }
 
-    // Keep player within map bounds
-    if (currentMap) {
-        float hw = currentMap->width() * currentMap->tileSize() * 0.5f;
-        float hh = currentMap->height() * currentMap->tileSize() * 0.5f;
-        m_position.x = std::max(-hw, std::min(hw, m_position.x));
-        m_position.z = std::max(-hh, std::min(hh, m_position.z));
-    }
+    // Push out of any overlapping collision rect (prevents getting stuck)
+    resolveCollisions(currentMap);
 
     if (sPressed && (dPressed || aPressed)) {
         m_direction = Direction::Front;
@@ -228,5 +268,3 @@ Direction Player::idleDirection() const {
     if (diff > -135.0f && diff <= -45.0f) return Direction::Left;
     return Direction::Front;
 }
-
-

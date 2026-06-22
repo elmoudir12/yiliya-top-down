@@ -227,17 +227,17 @@ static const std::unordered_map<std::string, MapMeta>& getMapMeta() {
     static const std::unordered_map<std::string, MapMeta> meta = {
         {"player_house", {
             14, 11, 0, 0,
-            {{4, 10, 2, 1, "front_yard", 12, 2}},
+            {{4, 10, 2, 1, "front_yard", 12, 4}},
             std::vector<uint8_t>(14 * 11, 0),
             4, 4, true, false, {},
         }},
         {"front_yard", {
-            25, 18, 0, 13,
-            {{8, 0, 5, 1, "player_house", 5, 8}},
-            std::vector<uint8_t>(25 * 18, 0),
-            12, 8, false, true,
-            {{2,2},{2,15},{6,2},{6,15},{10,2},{14,2},{18,2},{22,2},
-             {10,15},{14,15},{18,15},{22,15},{4,8},{8,12},{20,10}},
+            27, 20, 0, 13,
+            {{10, 2, 5, 1, "player_house", 5, 8}},
+            std::vector<uint8_t>(27 * 20, 0),
+            14, 10, false, true,
+            {{3,3},{3,16},{7,3},{7,16},{11,3},{15,3},{19,3},{23,3},
+             {11,16},{15,16},{19,16},{23,16},{5,9},{9,13},{21,11}},
         }},
     };
     return meta;
@@ -305,6 +305,8 @@ void Map::load(const std::string& mapName) {
     buildFloorBottom();
     if (it->second.walls)
         buildWalls();
+    else
+        buildBoundaryFence();
 
     generateMapTexture();
 
@@ -577,6 +579,17 @@ void Map::buildWalls() {
     vkMapMemory(m_engine->device(), m_wallMesh.indexBufferMemory, 0, isize, 0, &data);
     memcpy(data, idxs.data(), isize);
     vkUnmapMemory(m_engine->device(), m_wallMesh.indexBufferMemory);
+}
+
+void Map::buildBoundaryFence() {
+    float hw = m_width * m_tileSize * 0.5f;
+    float hh = m_height * m_tileSize * 0.5f;
+    // Thin (8-unit) invisible collision rects right at the floor edge
+    const float t = 8.0f;
+    m_collisionRects.push_back({0.0f, 0.0f, 2 * hw, t}); // north
+    m_collisionRects.push_back({0.0f, 2 * hh - t, 2 * hw, t}); // south
+    m_collisionRects.push_back({0.0f, 0.0f, t, 2 * hh}); // west
+    m_collisionRects.push_back({2 * hw - t, 0.0f, t, 2 * hh}); // east
 }
 
 static std::string fmtRoomName(const std::string& raw) {

@@ -103,6 +103,7 @@ private:
     void buildFloorTop();
     void buildFloorBottom();
     void buildWalls();
+    void buildBoundaryFence();
     void destroyMesh(LayerMesh& mesh);
 
 private:
