@@ -111,6 +111,7 @@ void Map::unload() {
     m_collisionTiles.clear();
     m_tileLayers.clear();
     m_collisionRects.clear();
+    m_wallCollisionRects.clear();
     m_transitions.clear();
 }
 
@@ -256,9 +257,12 @@ void Map::buildWalls() {
         { hw,     hw + t,  -hh - t, hh + t},
     };
 
-    // Collision rects for the 3D wall boxes (wall area only, not floor tiles)
+    // Collision rects for the 3D wall boxes
+    m_wallCollisionRects.clear();
     for (auto& b : walls) {
-        m_collisionRects.push_back({b.x0 + hw, b.z0 + hh, b.x1 - b.x0, b.z1 - b.z0});
+        m_wallCollisionRects.push_back({b.x0 + hw, b.z0 + hh, b.x1 - b.x0, b.z1 - b.z0});
+        // Also add to general collision rects for gameplay collision
+        m_collisionRects.push_back(m_wallCollisionRects.back());
     }
 
     for (int i = 0; i < 4; ++i) {

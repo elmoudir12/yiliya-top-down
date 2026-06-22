@@ -100,13 +100,26 @@ void Engine::renderCollisionDebug(Map* map) {
     float hw = map->width() * map->tileSize() * 0.5f;
     float hh = map->height() * map->tileSize() * 0.5f;
     float eps = 0.1f;
+    float wh = map->wallHeight();
 
-    // 3D wall collision rects (green) — matches the white wall boxes from buildWalls()
-    glm::vec4 col(0.0f, 0.8f, 0.0f, 1.0f);
-    for (auto& r : map->collisionRects()) {
+    // 3D wall collision volumes (green) — floor and ceiling faces
+    glm::vec4 wallCol(0.0f, 0.8f, 0.0f, 1.0f);
+    for (auto& r : map->wallCollisionRects()) {
         float cx = r.x - hw + r.w * 0.5f;
         float cz = r.y - hh + r.h * 0.5f;
-        m_renderer->drawDebugRect({cx, eps, cz}, {r.w, r.h}, col);
+        m_renderer->drawDebugRect({cx, eps, cz}, {r.w, r.h}, wallCol);
+        m_renderer->drawDebugRect({cx, wh, cz}, {r.w, r.h}, wallCol);
+    }
+
+    // TMX object-layer collision rects (blue) — floor only
+    glm::vec4 objCol(0.0f, 0.0f, 0.8f, 1.0f);
+    size_t wallCount = map->wallCollisionRects().size();
+    auto& allRects = map->collisionRects();
+    for (size_t i = 0; i + wallCount < allRects.size(); ++i) {
+        auto& r = allRects[i];
+        float cx = r.x - hw + r.w * 0.5f;
+        float cz = r.y - hh + r.h * 0.5f;
+        m_renderer->drawDebugRect({cx, eps, cz}, {r.w, r.h}, objCol);
     }
 }
 

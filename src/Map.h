@@ -39,7 +39,11 @@ public:
     float worldHeight() const { return m_height * m_tileSize; }
 
     const std::vector<CollisionRect>& collisionRects() const { return m_collisionRects; }
+    const std::vector<CollisionRect>& wallCollisionRects() const { return m_wallCollisionRects; }
     const std::vector<int>& groundTiles() const { return m_groundTiles; }
+
+    static constexpr float wallHeight() { return WALL_HEIGHT; }
+    static constexpr float wallThick() { return WALL_THICK; }
 
 private:
     struct LayerMesh {
@@ -66,6 +70,7 @@ private:
     std::vector<std::vector<int>> m_tileLayers;
     std::vector<Transition> m_transitions;
     std::vector<CollisionRect> m_collisionRects;
+    std::vector<CollisionRect> m_wallCollisionRects;
     std::vector<LayerMesh> m_layerMeshes;
     LayerMesh m_wallMesh;
     int m_spawnTileX = 0, m_spawnTileY = 0;
