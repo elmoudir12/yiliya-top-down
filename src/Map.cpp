@@ -680,10 +680,10 @@ void Map::generateMapTexture() {
         pixels[i+0] = r; pixels[i+1] = g; pixels[i+2] = b; pixels[i+3] = a;
     };
 
-    // Dark background
+    // Pure black background (Hollow Knight parchment-style darkness)
     for (int y = 0; y < texH; ++y)
         for (int x = 0; x < texW; ++x)
-            px(x, y, 20, 16, 12);
+            px(x, y, 0, 0, 0);
 
     // Sort rooms by area descending so interior rooms render on top
     std::vector<std::pair<std::string, MapMeta>> sorted;
@@ -692,25 +692,32 @@ void Map::generateMapTexture() {
         return a.second.width * a.second.height > b.second.width * b.second.height;
     });
 
-    // Render each room at its world position
+    // Render each room at its world position (HK style: white edges, brown interior)
     for (auto& [name, meta] : sorted) {
         int ox = (meta.worldX - minX) * PIX_PER_TILE;
         int oy = (meta.worldY - minY) * PIX_PER_TILE;
         bool isCurrent = (name == m_mapName);
+
+        // Room outer border (1px white outline)
+        for (int x = ox; x < ox + meta.width * PIX_PER_TILE; ++x) {
+            px(x, oy, 180, 170, 150);
+            px(x, oy + meta.height * PIX_PER_TILE - 1, 180, 170, 150);
+        }
+        for (int y = oy; y < oy + meta.height * PIX_PER_TILE; ++y) {
+            px(ox, y, 180, 170, 150);
+            px(ox + meta.width * PIX_PER_TILE - 1, y, 180, 170, 150);
+        }
+
         for (int ty = 0; ty < meta.height; ++ty) {
             for (int tx = 0; tx < meta.width; ++tx) {
                 bool blocked = meta.blocked[ty * meta.width + tx] != 0;
                 uint8_t r, g, b;
-                if (blocked) { r = 55; g = 35; b = 12; }
-                else { r = 170; g = 150; b = 120; }
-                if (isCurrent && !blocked) { r += 30; g += 30; b += 30; }
+                if (blocked) { r = 55; g = 42; b = 25; }
+                else { r = 110; g = 82; b = 50; }
+                if (isCurrent && !blocked) { r += 20; g += 15; b += 10; }
                 for (int dy = 0; dy < PIX_PER_TILE; ++dy) {
                     for (int dx = 0; dx < PIX_PER_TILE; ++dx) {
-                        int x = ox + tx * PIX_PER_TILE + dx;
-                        int y = oy + ty * PIX_PER_TILE + dy;
-                        bool edge = (dx == 0 || dy == 0 || dx == PIX_PER_TILE-1 || dy == PIX_PER_TILE-1);
-                        if (edge && !blocked) px(x, y, r*3/4, g*3/4, b*3/4);
-                        else px(x, y, r, g, b);
+                        px(ox + tx * PIX_PER_TILE + dx, oy + ty * PIX_PER_TILE + dy, r, g, b);
                     }
                 }
             }

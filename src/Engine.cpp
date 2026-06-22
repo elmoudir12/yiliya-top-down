@@ -272,7 +272,7 @@ void Engine::mainLoop() {
         prevM = currM;
 
         if (m_showMap && currentMap) {
-            m_renderer->setClearColor(0.05f, 0.05f, 0.08f);
+            m_renderer->setClearColor(0.0f, 0.0f, 0.0f);
             // Switch to orthographic projection for 2D overlay
             VkExtent2D ext = m_swapChainExtent;
             float asp = (float)ext.width / (float)ext.height;
