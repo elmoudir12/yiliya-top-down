@@ -96,6 +96,20 @@ void Engine::initVulkan() {
     m_mapManager->loadMap("player_house");
 }
 
+void Engine::renderCollisionDebug(Map* map) {
+    float hw = map->width() * map->tileSize() * 0.5f;
+    float hh = map->height() * map->tileSize() * 0.5f;
+    float eps = 0.1f;
+
+    // 3D wall collision rects (green) — matches the white wall boxes from buildWalls()
+    glm::vec4 col(0.0f, 0.8f, 0.0f, 1.0f);
+    for (auto& r : map->collisionRects()) {
+        float cx = r.x - hw + r.w * 0.5f;
+        float cz = r.y - hh + r.h * 0.5f;
+        m_renderer->drawDebugRect({cx, eps, cz}, {r.w, r.h}, col);
+    }
+}
+
 void Engine::updateCamera() {
     VkExtent2D extent = m_swapChainExtent;
     float aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
@@ -148,6 +162,10 @@ void Engine::mainLoop() {
                 m_mapManager->render();
             }
             m_player->render();
+
+            if (m_showCollisions && currentMap) {
+                renderCollisionDebug(currentMap);
+            }
 
             m_renderer->endFrame();
         }

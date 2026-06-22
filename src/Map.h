@@ -71,6 +71,7 @@ private:
     int m_spawnTileX = 0, m_spawnTileY = 0;
 
     Texture* m_tilesetTexture = nullptr;
+    Texture* m_wallTexture = nullptr;
 
     static constexpr float WALL_HEIGHT = 64.0f;
     static constexpr float WALL_THICK = 32.0f;

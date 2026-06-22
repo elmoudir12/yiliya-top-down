@@ -52,7 +52,7 @@ public:
     void drawSprite(VkDescriptorSet descriptorSet, const glm::vec2& position, const glm::vec2& scale, float rotation = 0.0f);
     void drawSprite3D(VkDescriptorSet descriptorSet, const glm::mat4& model);
     void drawTilemap(VkDescriptorSet descriptorSet, VkBuffer vertexBuffer, VkBuffer indexBuffer, uint32_t indexCount);
-    void drawDebugRect(const glm::vec2& position, const glm::vec2& scale, const glm::vec4& color);
+    void drawDebugRect(const glm::vec3& position, const glm::vec2& scale, const glm::vec4& color);
     void endFrame();
 
     VkDescriptorPool& descriptorPool() { return m_descriptorPool; }

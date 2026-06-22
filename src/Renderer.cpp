@@ -257,10 +257,12 @@ void Renderer::drawTilemap(VkDescriptorSet descriptorSet, VkBuffer vertexBuffer,
     vkCmdBindIndexBuffer(m_currentCommandBuffer, m_indexBuffer, 0, VK_INDEX_TYPE_UINT16);
 }
 
-void Renderer::drawDebugRect(const glm::vec2& position, const glm::vec2& scale, const glm::vec4& color) {
+void Renderer::drawDebugRect(const glm::vec3& position, const glm::vec2& scale, const glm::vec4& color) {
     vkCmdBindPipeline(m_currentCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_debugPipeline);
 
-    glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(position, 0.0f));
+    // Place rect on the XZ floor plane: rotate the XY quad 90° around X axis
+    glm::mat4 model = glm::translate(glm::mat4(1.0f), position);
+    model = glm::rotate(model, -glm::half_pi<float>(), glm::vec3(1.0f, 0.0f, 0.0f));
     model = glm::scale(model, glm::vec3(scale, 1.0f));
 
     DebugPushConstants push{};

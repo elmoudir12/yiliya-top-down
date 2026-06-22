@@ -13,6 +13,7 @@
 
 class Renderer;
 class Player;
+class Map;
 class MapManager;
 
 struct QueueFamilyIndices {
@@ -146,6 +147,7 @@ private:
     void mainLoop();
     void cleanup();
     void updateCamera();
+    void renderCollisionDebug(Map* map);
     void setWindowShouldClose() { m_framebufferResized = true; glfwSetWindowShouldClose(m_window, GLFW_TRUE); }
 
     void createInstance();

@@ -89,6 +89,12 @@ void Map::load(const std::string& mapName) {
     }
 
     buildWalls();
+
+    // 1x1 white texture for walls
+    if (!m_wallTexture) {
+        uint32_t white = 0xFFFFFFFF;
+        m_wallTexture = new Texture(m_engine, &white, 1, 1);
+    }
 }
 
 void Map::unload() {
@@ -97,6 +103,10 @@ void Map::unload() {
     }
     m_layerMeshes.clear();
     destroyMesh(m_wallMesh);
+    if (m_wallTexture) {
+        delete m_wallTexture;
+        m_wallTexture = nullptr;
+    }
     m_groundTiles.clear();
     m_collisionTiles.clear();
     m_tileLayers.clear();
@@ -314,8 +324,8 @@ void Map::render() {
                 mesh.vertexBuffer, mesh.indexBuffer, mesh.indexCount);
         }
     }
-    if (m_wallMesh.indexCount > 0) {
-        m_renderer->drawTilemap(m_tilesetTexture->descriptorSet(),
+    if (m_wallMesh.indexCount > 0 && m_wallTexture) {
+        m_renderer->drawTilemap(m_wallTexture->descriptorSet(),
             m_wallMesh.vertexBuffer, m_wallMesh.indexBuffer, m_wallMesh.indexCount);
     }
 }
