@@ -573,7 +573,7 @@ void Map::render() {
         for (auto& tree : m_trees) {
             glm::vec3 fwd = glm::normalize(camPos - glm::vec3(tree.x, 0, tree.z));
             float angle = atan2f(fwd.x, fwd.z);
-            float s = tree.scale * 64.0f;
+            float s = tree.scale * 128.0f;
             float trunkBotV = 55.0f / 64.0f;
             float yOff = (trunkBotV - 0.5f) * s;
             glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(tree.x, yOff, tree.z));
