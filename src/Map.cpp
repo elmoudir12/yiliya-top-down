@@ -424,17 +424,8 @@ void Map::buildWalls() {
 
     // Door frame
     const float pw = 4.0f;
-    const float bh = 4.0f;
+    const float bh = 8.0f;
     for (auto& dg : m_doorGaps) {
-        if (dg.side == 1) { // south wall — top beam, side faces use wainscoting (all brown)
-            float x0 = dg.gapMin, x1 = dg.gapMax;
-            addWallQuad({x1,wh-bh,hh}, {x1,wh-bh,hh+t}, {x1,wh,hh+t}, {x1,wh,hh}, 0.5f, 0.9375f);
-            addWallQuad({x0,wh-bh,hh+t}, {x0,wh-bh,hh}, {x0,wh,hh}, {x0,wh,hh+t}, 0.5f, 0.9375f);
-            addWallQuad({x1,wh-bh,hh+t}, {x0,wh-bh,hh+t}, {x0,wh,hh+t}, {x1,wh,hh+t}, 0.5f, 0.9375f);
-            addWallQuad({x0,wh-bh,hh}, {x1,wh-bh,hh}, {x1,wh,hh}, {x0,wh,hh}, 0.5f, 0.9375f);
-            addWallQuad({x0,wh,hh+t}, {x1,wh,hh+t}, {x1,wh,hh}, {x0,wh,hh}, 0.5f, 0.9375f);
-            addWallQuad({x0,wh-bh,hh}, {x1,wh-bh,hh}, {x1,wh-bh,hh+t}, {x0,wh-bh,hh+t}, 0.5f, 0.9375f);
-        }
         if (dg.side == 0) { // north wall gap
             float x0 = dg.gapMin, x1 = dg.gapMax;
             addBoxY(x0 - pw, x0, -hh - t, -hh, 0, wh);
