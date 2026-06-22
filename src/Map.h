@@ -71,6 +71,8 @@ private:
     std::vector<Transition> m_transitions;
     std::vector<CollisionRect> m_collisionRects;
     std::vector<CollisionRect> m_wallCollisionRects;
+    struct DoorGap { int side; float gapMin, gapMax; };
+    std::vector<DoorGap> m_doorGaps;
     LayerMesh m_wallMesh;
     LayerMesh m_floorTopMesh;
     LayerMesh m_floorBottomMesh;

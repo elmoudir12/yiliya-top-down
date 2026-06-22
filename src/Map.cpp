@@ -7,6 +7,7 @@
 #include <cstring>
 #include <stdexcept>
 #include <unordered_map>
+#include <algorithm>
 
 Texture* Map::s_tilesetTexture = nullptr;
 int Map::s_tilesetRefCount = 0;
@@ -201,6 +202,27 @@ void Map::load(const std::string& mapName) {
         m_floorTexture = createWoodFloorTexture(m_engine);
     }
 
+    // Compute door gaps from transitions that touch a map edge
+    m_doorGaps.clear();
+    {
+        float hw2 = m_width * m_tileSize * 0.5f;
+        float hh2 = m_height * m_tileSize * 0.5f;
+        for (auto& t : m_transitions) {
+            float x0 = t.tileX * m_tileSize - hw2;
+            float x1 = (t.tileX + t.tileW) * m_tileSize - hw2;
+            float z0 = t.tileY * m_tileSize - hh2;
+            float z1 = (t.tileY + t.tileH) * m_tileSize - hh2;
+            if (t.tileY + t.tileH >= m_height)
+                m_doorGaps.push_back({1, x0, x1}); // south
+            if (t.tileY <= 0)
+                m_doorGaps.push_back({0, x0, x1}); // north
+            if (t.tileX + t.tileW >= m_width)
+                m_doorGaps.push_back({3, z0, z1}); // east
+            if (t.tileX <= 0)
+                m_doorGaps.push_back({2, z0, z1}); // west
+        }
+    }
+
     buildFloorTop();
     buildFloorBottom();
     buildWalls();
@@ -223,6 +245,7 @@ void Map::unload() {
     m_tileLayers.clear();
     m_collisionRects.clear();
     m_wallCollisionRects.clear();
+    m_doorGaps.clear();
     m_transitions.clear();
 }
 
@@ -322,50 +345,118 @@ void Map::buildWalls() {
         verts.push_back({b, {uEnd, vFloor}});
         verts.push_back({c, {uEnd, vCeil}});
         verts.push_back({d, {0.0f, vCeil}});
-        idxs.push_back(base + 0); idxs.push_back(base + 1); idxs.push_back(base + 2);
-        idxs.push_back(base + 2); idxs.push_back(base + 3); idxs.push_back(base + 0);
+        idxs.push_back(base+0); idxs.push_back(base+1); idxs.push_back(base+2);
+        idxs.push_back(base+2); idxs.push_back(base+3); idxs.push_back(base+0);
     };
 
-    // Each wall is a solid box (5 faces, no bottom since floor covers it).
-    // Walls overlap at corners by the full thickness so there are no gaps.
-    // Box definition: x0,x1 = X range, z0,z1 = Z range, y0=0, y1=wh.
-    // Faces: +X, -X, +Z, -Z, top.
-
-    struct WallBox { float x0, x1, z0, z1; };
-    WallBox walls[4] = {
-        // north: extends past east and west edges by t
-        {-hw - t, hw + t, -hh - t, -hh},
-        // south
-        {-hw - t, hw + t,  hh,      hh + t},
-        // west
-        {-hw - t, -hw,     -hh - t, hh + t},
-        // east
-        { hw,     hw + t,  -hh - t, hh + t},
-    };
-
-    // Collision rects for the 3D wall boxes
-    m_wallCollisionRects.clear();
-    for (auto& b : walls) {
-        m_wallCollisionRects.push_back({b.x0 + hw, b.z0 + hh, b.x1 - b.x0, b.z1 - b.z0});
+    // Build a solid wall box from (x0,z0)-(x1,z1) spanning y=[0,wh]
+    auto addWallBox = [&](float x0, float x1, float z0, float z1) {
+        addWallQuad({x1,0,z0}, {x1,0,z1}, {x1,wh,z1}, {x1,wh,z0});
+        addWallQuad({x0,0,z1}, {x0,0,z0}, {x0,wh,z0}, {x0,wh,z1});
+        addWallQuad({x1,0,z1}, {x0,0,z1}, {x0,wh,z1}, {x1,wh,z1});
+        addWallQuad({x0,0,z0}, {x1,0,z0}, {x1,wh,z0}, {x0,wh,z0});
+        addWallQuad({x0,wh,z1}, {x1,wh,z1}, {x1,wh,z0}, {x0,wh,z0}, 0.5f, 0.9375f);
+        addWallQuad({x0,0,z0}, {x1,0,z0}, {x1,0,z1}, {x0,0,z1}, 0.5f, 0.9375f);
+        m_wallCollisionRects.push_back({x0+hw, z0+hh, x1-x0, z1-z0});
         m_collisionRects.push_back(m_wallCollisionRects.back());
+    };
+
+    // Build a box at arbitrary y range (for door frame etc.)
+    auto addBoxY = [&](float x0, float x1, float z0, float z1, float y0, float y1) {
+        addWallQuad({x1,y0,z0}, {x1,y0,z1}, {x1,y1,z1}, {x1,y1,z0});
+        addWallQuad({x0,y0,z1}, {x0,y0,z0}, {x0,y1,z0}, {x0,y1,z1});
+        addWallQuad({x1,y0,z1}, {x0,y0,z1}, {x0,y1,z1}, {x1,y1,z1});
+        addWallQuad({x0,y0,z0}, {x1,y0,z0}, {x1,y1,z0}, {x0,y1,z0});
+        addWallQuad({x0,y1,z1}, {x1,y1,z1}, {x1,y1,z0}, {x0,y1,z0}, 0.5f, 0.9375f);
+        addWallQuad({x0,y0,z0}, {x1,y0,z0}, {x1,y0,z1}, {x0,y0,z1}, 0.5f, 0.9375f);
+    };
+
+    m_wallCollisionRects.clear();
+
+    // Collect gaps by side
+    struct Gap { float from, to; };
+    std::vector<Gap> wallGaps[4];
+    for (auto& dg : m_doorGaps) {
+        if (dg.side >= 0 && dg.side < 4)
+            wallGaps[dg.side].push_back({dg.gapMin, dg.gapMax});
+    }
+    for (int i = 0; i < 4; ++i)
+        std::sort(wallGaps[i].begin(), wallGaps[i].end(),
+            [](auto& a, auto& b) { return a.from < b.from; });
+
+    // Default wall definitions: for N/S (side 0/1) a0..a1 = X, b0..b1 = Z
+    // For E/W (side 2/3) a0..a1 = Z, b0..b1 = X (swapped)
+    struct { float a0, a1, b0, b1; int side; } base[4] = {
+        {-hw - t, hw + t, -hh - t, -hh, 0}, // north
+        {-hw - t, hw + t,  hh,      hh + t, 1}, // south
+        {-hh - t, hh + t, -hw - t, -hw, 2}, // west (a=Z, b=X)
+        {-hh - t, hh + t,  hw,      hw + t, 3}, // east (a=Z, b=X)
+    };
+
+    for (auto& w : base) {
+        auto& gv = wallGaps[w.side];
+        if (gv.empty()) {
+            if (w.side <= 1)
+                addWallBox(w.a0, w.a1, w.b0, w.b1);
+            else
+                addWallBox(w.b0, w.b1, w.a0, w.a1);
+            continue;
+        }
+        float cur = w.a0;
+        for (auto& gap : gv) {
+            float cut0 = std::max(cur, gap.from);
+            float cut1 = std::min(w.a1, gap.to);
+            if (cut0 > cur + 0.1f) {
+                if (w.side <= 1)
+                    addWallBox(cur, cut0, w.b0, w.b1);
+                else
+                    addWallBox(w.b0, w.b1, cur, cut0);
+            }
+            cur = std::max(cur, cut1);
+        }
+        if (cur < w.a1 - 0.1f) {
+            if (w.side <= 1)
+                addWallBox(cur, w.a1, w.b0, w.b1);
+            else
+                addWallBox(w.b0, w.b1, cur, w.a1);
+        }
     }
 
-    for (int i = 0; i < 4; ++i) {
-        auto& w = walls[i];
-        float x0 = w.x0, x1 = w.x1, z0 = w.z0, z1 = w.z1;
-
-        // +X face
-        addWallQuad({x1, 0, z0}, {x1, 0, z1}, {x1, wh, z1}, {x1, wh, z0});
-        // -X face
-        addWallQuad({x0, 0, z1}, {x0, 0, z0}, {x0, wh, z0}, {x0, wh, z1});
-        // +Z face
-        addWallQuad({x1, 0, z1}, {x0, 0, z1}, {x0, wh, z1}, {x1, wh, z1});
-        // -Z face
-        addWallQuad({x0, 0, z0}, {x1, 0, z0}, {x1, wh, z0}, {x0, wh, z0});
-        // top and bottom faces — same wood texture as the wainscoting
-        addWallQuad({x0, wh, z1}, {x1, wh, z1}, {x1, wh, z0}, {x0, wh, z0}, 0.5f, 0.9375f);
-        addWallQuad({x0, 0, z0}, {x1, 0, z0}, {x1, 0, z1}, {x0, 0, z1}, 0.5f, 0.9375f);
+    // Door frame
+    const float pw = 4.0f;
+    const float bh = 4.0f;
+    for (auto& dg : m_doorGaps) {
+        if (dg.side == 1) { // south wall — top beam, side faces use wainscoting (all brown)
+            float x0 = dg.gapMin, x1 = dg.gapMax;
+            addWallQuad({x1,wh-bh,hh}, {x1,wh-bh,hh+t}, {x1,wh,hh+t}, {x1,wh,hh}, 0.5f, 0.9375f);
+            addWallQuad({x0,wh-bh,hh+t}, {x0,wh-bh,hh}, {x0,wh,hh}, {x0,wh,hh+t}, 0.5f, 0.9375f);
+            addWallQuad({x1,wh-bh,hh+t}, {x0,wh-bh,hh+t}, {x0,wh,hh+t}, {x1,wh,hh+t}, 0.5f, 0.9375f);
+            addWallQuad({x0,wh-bh,hh}, {x1,wh-bh,hh}, {x1,wh,hh}, {x0,wh,hh}, 0.5f, 0.9375f);
+            addWallQuad({x0,wh,hh+t}, {x1,wh,hh+t}, {x1,wh,hh}, {x0,wh,hh}, 0.5f, 0.9375f);
+            addWallQuad({x0,wh-bh,hh}, {x1,wh-bh,hh}, {x1,wh-bh,hh+t}, {x0,wh-bh,hh+t}, 0.5f, 0.9375f);
+        }
+        if (dg.side == 0) { // north wall gap
+            float x0 = dg.gapMin, x1 = dg.gapMax;
+            addBoxY(x0 - pw, x0, -hh - t, -hh, 0, wh);
+            addBoxY(x1, x1 + pw, -hh - t, -hh, 0, wh);
+            addBoxY(x0 - pw, x1 + pw, -hh - t, -hh, wh - bh, wh);
+        }
+        if (dg.side == 2) { // west wall gap (z range)
+            float z0 = dg.gapMin, z1 = dg.gapMax;
+            addBoxY(-hw - t, -hw, z0 - pw, z0, 0, wh);
+            addBoxY(-hw - t, -hw, z1, z1 + pw, 0, wh);
+            addBoxY(-hw - t, -hw, z0 - pw, z1 + pw, wh - bh, wh);
+        }
+        if (dg.side == 3) { // east wall gap (z range)
+            float z0 = dg.gapMin, z1 = dg.gapMax;
+            addBoxY(hw, hw + t, z0 - pw, z0, 0, wh);
+            addBoxY(hw, hw + t, z1, z1 + pw, 0, wh);
+            addBoxY(hw, hw + t, z0 - pw, z1 + pw, wh - bh, wh);
+        }
     }
+
+    m_wallMesh.indexCount = static_cast<uint32_t>(idxs.size());
+    if (m_wallMesh.indexCount == 0) return;
 
     m_wallMesh.indexCount = static_cast<uint32_t>(idxs.size());
     if (m_wallMesh.indexCount == 0) return;
