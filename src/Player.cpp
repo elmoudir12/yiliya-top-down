@@ -159,7 +159,7 @@ void Player::render() {
     // Slightly above floor to avoid z-fighting
     // Negate Y scale to un-flip the sprite (projection has Y-flip for 3D room orientation)
     glm::vec3 pos3D = m_position;
-    pos3D.y = 0.5f;
+    pos3D.y = 32.0f;
     glm::mat4 model = glm::translate(glm::mat4(1.0f), pos3D);
     model = glm::rotate(model, angle, glm::vec3(0.0f, 1.0f, 0.0f));
     model = glm::scale(model, glm::vec3(scaleX, -scaleY, 1.0f));
