@@ -46,6 +46,38 @@ static Texture* createWoodFloorTexture(Engine* engine) {
         VK_SAMPLER_ADDRESS_MODE_REPEAT, VK_SAMPLER_ADDRESS_MODE_REPEAT);
 }
 
+static Texture* createGrassTexture(Engine* engine) {
+    const int S = 32;
+    std::vector<uint8_t> p(S * S * 4, 255);
+    auto clamp8 = [](int v) { return static_cast<uint8_t>(v < 0 ? 0 : v > 255 ? 255 : v); };
+    auto hash = [](int x, int y) -> int {
+        unsigned h = (unsigned)(x * 374761393 + y * 668265263);
+        h = (h ^ (h >> 13)) * 1274126177u;
+        return (int)((h ^ (h >> 16)) & 0xFF);
+    };
+    for (int y = 0; y < S; ++y) {
+        for (int x = 0; x < S; ++x) {
+            int h = hash(x, y);
+            // Base green with variation
+            int r = 50 + (h % 20);
+            int g = 130 + (h % 35);
+            int b = 35 + (h % 15);
+            // Occasional darker/lighter patches
+            if ((hash(x/2, y/2) % 5) == 0) { r += 10; g += 25; b += 8; }
+            if ((hash(x*3, y) % 7) == 0) { r -= 8; g -= 20; b -= 5; }
+            // Tiny flower dots
+            if ((hash(x+5, y+7) % 15) == 0) { r = 200; g = 80; b = 120; }
+            if ((hash(x+3, y+11) % 20) == 0) { r = 220; g = 200; b = 60; }
+            p[(y * S + x) * 4 + 0] = clamp8(r);
+            p[(y * S + x) * 4 + 1] = clamp8(g);
+            p[(y * S + x) * 4 + 2] = clamp8(b);
+            p[(y * S + x) * 4 + 3] = 255;
+        }
+    }
+    return new Texture(engine, p.data(), S, S,
+        VK_SAMPLER_ADDRESS_MODE_REPEAT, VK_SAMPLER_ADDRESS_MODE_REPEAT);
+}
+
 static Texture* createTreeTexture(Engine* engine) {
     const int S = 64;
     std::vector<uint8_t> p(S * S * 4, 0);
@@ -180,7 +212,8 @@ struct MapMeta {
     std::vector<uint8_t> blocked;
     int spawnTileX, spawnTileY;
     bool walls = true;
-    std::vector<std::pair<int,int>> trees; // tile coords
+    bool grassFloor = false;
+    std::vector<std::pair<int,int>> trees;
 };
 
 static const std::unordered_map<std::string, MapMeta>& getMapMeta() {
@@ -199,13 +232,13 @@ static const std::unordered_map<std::string, MapMeta>& getMapMeta() {
             14, 11,
             {{4, 10, 2, 1, "front_yard", 12, 2}},
             std::vector<uint8_t>(14 * 11, 0),
-            4, 4, true, {},
+            4, 4, true, false, {},
         }},
         {"front_yard", {
             25, 18,
             {{8, 17, 5, 1, "player_house", 5, 8}},
             borderGrid({25, 18}),
-            12, 8, false,
+            12, 8, false, true,
             {{2,2},{2,15},{6,2},{6,15},{10,2},{14,2},{18,2},{22,2},
              {10,15},{14,15},{18,15},{22,15},{4,8},{8,12},{20,10}},
         }},
@@ -244,7 +277,9 @@ void Map::load(const std::string& mapName) {
         m_wallTexture = createTimberTexture(m_engine);
     }
     if (!m_floorTexture) {
-        m_floorTexture = createWoodFloorTexture(m_engine);
+        m_floorTexture = it->second.grassFloor
+            ? createGrassTexture(m_engine)
+            : createWoodFloorTexture(m_engine);
     }
 
     m_doorGaps.clear();
