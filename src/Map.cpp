@@ -341,8 +341,9 @@ void Map::buildWalls() {
         addWallQuad({x1, 0, z1}, {x0, 0, z1}, {x0, wh, z1}, {x1, wh, z1});
         // -Z face
         addWallQuad({x0, 0, z0}, {x1, 0, z0}, {x1, wh, z0}, {x0, wh, z0});
-        // top face — same wood texture as the wainscoting (V=0.5..0.9375)
+        // top and bottom faces — same wood texture as the wainscoting
         addWallQuad({x0, wh, z1}, {x1, wh, z1}, {x1, wh, z0}, {x0, wh, z0}, 0.5f, 0.9375f);
+        addWallQuad({x0, 0, z0}, {x1, 0, z0}, {x1, 0, z1}, {x0, 0, z1}, 0.5f, 0.9375f);
     }
 
     m_wallMesh.indexCount = static_cast<uint32_t>(idxs.size());
