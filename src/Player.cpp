@@ -45,15 +45,20 @@ bool Player::canMoveTo(float x, float z, const Map* map) const {
     float hh = map->height() * map->tileSize() * 0.5f;
     float tileSize = static_cast<float>(map->tileSize());
 
-    // Convert 3D (x, z) to 2D tile space (top-left origin)
+    // Pixel-perfect bounds from current sprite frame
+    auto& tex = m_textures[directionIndex(m_direction)][m_frame];
+    glm::vec4 vb = tex->visibleBounds();
+    float texW = tex->size().x;
+    float scale = 64.0f / texW;  // quad is 64 world-units wide regardless of texel size
+
     float tx = x + hw;
     float ty = z + hh;
+    float halfWorld = texW * scale * 0.5f;
 
-    float half = 24.0f;
-    float playerLeft = tx - half;
-    float playerTop = ty - half;
-    float playerRight = tx + half;
-    float playerBottom = ty + half;
+    float playerLeft   = tx - halfWorld + vb.x * scale;
+    float playerTop    = ty - halfWorld + vb.y * scale;
+    float playerRight  = tx - halfWorld + vb.z * scale;
+    float playerBottom = ty - halfWorld + vb.w * scale;
 
     // Tile grid collision
     int tx1 = static_cast<int>(playerLeft) / static_cast<int>(tileSize);
@@ -150,6 +155,20 @@ void Player::update(float deltaTime, const Map* currentMap) {
         m_frame = 0;
         m_animTimer = 0.0f;
     }
+}
+
+glm::vec4 Player::visibleBounds3D() const {
+    auto& tex = m_textures[directionIndex(m_direction)][m_frame];
+    glm::vec4 vb = tex->visibleBounds();
+    float texW = tex->size().x;
+    float scale = 64.0f / texW;
+    float half = texW * scale * 0.5f;
+    return {
+        m_position.x - half + vb.x * scale,
+        m_position.z - half + vb.y * scale,
+        m_position.x - half + vb.z * scale,
+        m_position.z - half + vb.w * scale,
+    };
 }
 
 void Player::render() {

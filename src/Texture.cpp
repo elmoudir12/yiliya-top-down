@@ -77,6 +77,27 @@ void Texture::createTextureImage(const std::string& filepath) {
     vkMapMemory(m_engine->device(), stagingBufferMemory, 0, imageSize, 0, &data);
     memcpy(data, pixels, imageSize);
     vkUnmapMemory(m_engine->device(), stagingBufferMemory);
+
+    // Scan for visible pixel bounds (non-zero alpha)
+    int minX = texWidth, minY = texHeight, maxX = 0, maxY = 0;
+    bool hasVisible = false;
+    for (int y = 0; y < texHeight; ++y) {
+        for (int x = 0; x < texWidth; ++x) {
+            if (pixels[(y * texWidth + x) * 4 + 3] > 0) {
+                if (x < minX) minX = x;
+                if (y < minY) minY = y;
+                if (x > maxX) maxX = x;
+                if (y > maxY) maxY = y;
+                hasVisible = true;
+            }
+        }
+    }
+    if (hasVisible) {
+        m_visibleBounds = glm::vec4(minX, minY, maxX + 1, maxY + 1);
+    } else {
+        m_visibleBounds = glm::vec4(0, 0, texWidth, texHeight);
+    }
+
     stbi_image_free(pixels);
 
     m_engine->createImage(texWidth, texHeight, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL,

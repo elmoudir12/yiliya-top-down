@@ -14,6 +14,8 @@ public:
 
     VkDescriptorSet descriptorSet() const { return m_descriptorSet; }
     glm::vec2 size() const { return m_size; }
+    // Pixel-perfect visible bounds (left, top, right, bottom) in texel coords
+    glm::vec4 visibleBounds() const { return m_visibleBounds; }
 
 private:
     Engine* m_engine;
@@ -23,6 +25,7 @@ private:
     VkSampler m_sampler = VK_NULL_HANDLE;
     VkDescriptorSet m_descriptorSet = VK_NULL_HANDLE;
     glm::vec2 m_size{};
+    glm::vec4 m_visibleBounds{0,0,0,0};
 
     void createTextureImage(const std::string& filepath);
     void createTextureImageView();

@@ -122,12 +122,10 @@ void Engine::renderCollisionDebug(Map* map, Player* player) {
         m_renderer->drawDebugRect({cx, 0.1f, cz}, {r.w, r.h}, objCol);
     }
 
-    // Player collision volume (yellow) — 48×48×64 box matching sprite texture
-    auto pos = player->position();
-    float half = 24.0f;
+    // Player pixel-perfect collision volume (yellow) from current sprite frame
+    auto vb = player->visibleBounds3D();
     glm::vec4 playerCol(1.0f, 0.8f, 0.0f, 1.0f);
-    m_renderer->drawDebugBox({pos.x - half, 0.0f, pos.z - half},
-                             {pos.x + half, 64.0f, pos.z + half}, playerCol);
+    m_renderer->drawDebugBox({vb.x, 0.0f, vb.y}, {vb.z, 64.0f, vb.w}, playerCol);
 }
 
 void Engine::updateCamera() {

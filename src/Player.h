@@ -26,6 +26,8 @@ public:
 
     glm::vec3 position() const { return m_position; }
     void setPosition(const glm::vec3& pos) { m_position = pos; }
+    // Current frame's pixel-perfect 3D world bounds (x0, z0, x1, z1)
+    glm::vec4 visibleBounds3D() const;
 
     static constexpr float PLAYER_WIDTH = 48.0f;
     static constexpr float PLAYER_HEIGHT = 48.0f;
