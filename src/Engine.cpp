@@ -199,6 +199,23 @@ void Engine::renderMapOverlay(Map* map, Player* player) {
         mm = glm::scale(mm, glm::vec3(dotSize, -dotSize, 1));
         m_renderer->drawSprite3D(m_playerDotTexture->descriptorSet(), mm);
     }
+
+    // Room name labels (high-resolution textures with proper alpha)
+    float originX = (float)map->globalOriginX();
+    float originY = (float)map->globalOriginY();
+    float numTilesW = (float)gW / Map::mapPixPerTile();
+    float numTilesH = (float)gH / Map::mapPixPerTile();
+    float labelH = 0.055f;
+    for (auto& label : map->textLabels()) {
+        float u = (label.worldCenterX - originX) / numTilesW;
+        float v = (label.worldCenterY - originY) / numTilesH;
+        float lx = (u - 0.5f) * qw;
+        float ly = -(v - 0.5f) * qh;
+        float lw = labelH * label.texW / label.texH;
+        glm::mat4 lm = glm::translate(glm::mat4(1.0f), glm::vec3(lx, ly, 0));
+        lm = glm::scale(lm, glm::vec3(lw, -labelH, 1));
+        m_renderer->drawSprite3D(label.texture->descriptorSet(), lm);
+    }
 }
 
 void Engine::updateCamera() {

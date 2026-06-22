@@ -49,7 +49,14 @@ public:
 
     static constexpr int mapPixPerTile() { return 10; }
 
+    struct TextLabel {
+        Texture* texture = nullptr;
+        int texW = 0, texH = 0;
+        float worldCenterX = 0, worldCenterY = 0;
+    };
+
     Texture* mapOverlayTexture() const { return m_mapOverlayTexture; }
+    const std::vector<TextLabel>& textLabels() const { return m_textLabels; }
     int globalOriginX() const { return m_globalOriginX; }
     int globalOriginY() const { return m_globalOriginY; }
     int globalPixW() const { return m_globalPixW; }
@@ -100,6 +107,7 @@ private:
 
 private:
     Texture* m_mapOverlayTexture = nullptr;
+    std::vector<TextLabel> m_textLabels;
     int m_globalOriginX = 0, m_globalOriginY = 0;
     int m_globalPixW = 0, m_globalPixH = 0;
     int m_curWorldX = 0, m_curWorldY = 0;

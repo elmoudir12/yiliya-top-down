@@ -355,6 +355,10 @@ void Map::unload() {
         delete m_mapOverlayTexture;
         m_mapOverlayTexture = nullptr;
     }
+    for (auto& lb : m_textLabels) {
+        if (lb.texture) delete lb.texture;
+    }
+    m_textLabels.clear();
     m_collisionGrid.clear();
     m_trees.clear();
     m_collisionRects.clear();
@@ -603,10 +607,8 @@ static void drawText(uint8_t* pixels, int pw, int ph, stbtt_fontinfo* font,
                      const char* text, int x, int y, float size,
                      uint8_t r, uint8_t g, uint8_t b) {
     float scale = stbtt_ScaleForPixelHeight(font, size);
-    int ascent;
-    stbtt_GetFontVMetrics(font, &ascent, nullptr, nullptr);
     float posX = (float)x;
-    float posY = (float)y + ascent * scale;
+    float posY = (float)y;
 
     while (*text) {
         unsigned char ch = (unsigned char)*text;
@@ -633,6 +635,7 @@ static void drawText(uint8_t* pixels, int pw, int ph, stbtt_fontinfo* font,
                                 pixels[i+0] = (uint8_t)(r * f + pixels[i+0] * (1.0f - f));
                                 pixels[i+1] = (uint8_t)(g * f + pixels[i+1] * (1.0f - f));
                                 pixels[i+2] = (uint8_t)(b * f + pixels[i+2] * (1.0f - f));
+                                pixels[i+3] = (uint8_t)(255 * f + pixels[i+3] * (1.0f - f));
                             }
                         }
                     }
@@ -762,45 +765,60 @@ void Map::generateMapTexture() {
     for (int x = cx0; x <= cx1; ++x) { px(x, cy0, 255, 220, 100); px(x, cy1, 255, 220, 100); }
     for (int y = cy0; y <= cy1; ++y) { px(cx0, y, 255, 220, 100); px(cx1, y, 255, 220, 100); }
 
-    // Render room name labels using Alagard font
-    FILE* f = fopen("fonts/alagard.ttf", "rb");
-    if (f) {
-        fseek(f, 0, SEEK_END);
-        long fsz = ftell(f);
-        fseek(f, 0, SEEK_SET);
-        std::vector<unsigned char> fbuf(fsz);
-        if (fread(fbuf.data(), 1, fsz, f) == (size_t)fsz) {
-            stbtt_fontinfo fi;
-            if (stbtt_InitFont(&fi, fbuf.data(), 0)) {
-                float fontSize = 16.0f;
-                int totalAscent, totalDescent;
-                stbtt_GetFontVMetrics(&fi, &totalAscent, &totalDescent, nullptr);
-                for (auto& [name, meta] : allMaps) {
-                    std::string dn = fmtRoomName(name);
-                    int ox = (meta.worldX - minX) * PIX_PER_TILE;
-                    int oy = (meta.worldY - minY) * PIX_PER_TILE;
-                    int roomW = meta.width * PIX_PER_TILE;
-                    int roomH = meta.height * PIX_PER_TILE;
-                    float scale = stbtt_ScaleForPixelHeight(&fi, fontSize);
-                    float tw = 0;
-                    for (size_t i = 0; i < dn.size(); ++i) {
-                        int adv;
-                        stbtt_GetCodepointHMetrics(&fi, (unsigned char)dn[i], &adv, nullptr);
-                        tw += adv * scale;
-                    }
-                    int tx = ox + roomW / 2 - (int)(tw / 2);
-                    int roomCY = oy + roomH / 2;
-                    float textH = (totalAscent - totalDescent) * scale;
-                    int ty = roomCY - (int)(textH * 0.5f);
-                    drawText(pixels.data(), texW, texH, &fi, dn.c_str(), tx, ty, fontSize, 255, 255, 255);
-                }
-            }
-        }
-        fclose(f);
-    }
-
     m_mapOverlayTexture = new Texture(m_engine, pixels.data(), texW, texH);
-    m_mapOverlayTexture->setFilter(VK_FILTER_LINEAR, VK_FILTER_LINEAR);
+
+    // Generate high-resolution room name label textures (with proper alpha for anti-aliasing)
+    FILE* f = fopen("fonts/alagard.ttf", "rb");
+    if (!f) return;
+    fseek(f, 0, SEEK_END);
+    long fsz = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    std::vector<unsigned char> fbuf(fsz);
+    if (fread(fbuf.data(), 1, fsz, f) != (size_t)fsz) { fclose(f); return; }
+    fclose(f);
+
+    stbtt_fontinfo fi;
+    if (!stbtt_InitFont(&fi, fbuf.data(), 0)) return;
+
+    int totalAscent, totalDescent;
+    stbtt_GetFontVMetrics(&fi, &totalAscent, &totalDescent, nullptr);
+    float labelFontSize = 56.0f;
+    float labelScale = stbtt_ScaleForPixelHeight(&fi, labelFontSize);
+    float textPixelH = (totalAscent - totalDescent) * labelScale;
+
+    for (auto& [name, meta] : allMaps) {
+        std::string dn = fmtRoomName(name);
+
+        float tw = 0;
+        for (size_t i = 0; i < dn.size(); ++i) {
+            int adv;
+            stbtt_GetCodepointHMetrics(&fi, (unsigned char)dn[i], &adv, nullptr);
+            tw += adv * labelScale;
+        }
+
+        int pad = 4;
+        int lw = (int)tw + pad * 2;
+        int lh = (int)textPixelH + pad * 2;
+        std::vector<uint8_t> lp(lw * lh * 4, 0); // fully transparent (alpha=0)
+
+        int tx = pad;
+        int ty = pad + (int)(totalAscent * labelScale);
+
+        // Background starts fully transparent, drawText properly sets alpha for anti-aliased edges
+        drawText(lp.data(), lw, lh, &fi, dn.c_str(), tx+1, ty+1, labelFontSize, 40, 30, 10);
+        drawText(lp.data(), lw, lh, &fi, dn.c_str(), tx, ty, labelFontSize, 255, 255, 255);
+
+        Texture* tex = new Texture(m_engine, lp.data(), lw, lh);
+        tex->setFilter(VK_FILTER_LINEAR, VK_FILTER_LINEAR);
+
+        TextLabel label;
+        label.texture = tex;
+        label.texW = lw;
+        label.texH = lh;
+        label.worldCenterX = meta.worldX + meta.width * 0.5f;
+        label.worldCenterY = meta.worldY + meta.height * 0.5f;
+        m_textLabels.push_back(label);
+    }
 }
 
 bool Map::isTileBlocked(int tileX, int tileY) const {
