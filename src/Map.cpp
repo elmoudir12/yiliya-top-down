@@ -256,6 +256,11 @@ void Map::buildWalls() {
         { hw,     hw + t,  -hh - t, hh + t},
     };
 
+    // Collision rects for the 3D wall boxes (wall area only, not floor tiles)
+    for (auto& b : walls) {
+        m_collisionRects.push_back({b.x0 + hw, b.z0 + hh, b.x1 - b.x0, b.z1 - b.z0});
+    }
+
     for (int i = 0; i < 4; ++i) {
         auto& w = walls[i];
         float x0 = w.x0, x1 = w.x1, z0 = w.z0, z1 = w.z1;
