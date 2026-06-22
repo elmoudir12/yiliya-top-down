@@ -224,16 +224,6 @@ struct MapMeta {
 };
 
 static const std::unordered_map<std::string, MapMeta>& getMapMeta() {
-    // Helper: generate a border-blocked collision grid
-    struct Grid { int w, h; };
-    auto borderGrid = [](Grid g) {
-        std::vector<uint8_t> v(g.w * g.h, 0);
-        for (int y = 0; y < g.h; ++y)
-            for (int x = 0; x < g.w; ++x)
-                if (x == 0 || x == g.w - 1 || y == 0 || y == g.h - 1)
-                    v[y * g.w + x] = 1;
-        return v;
-    };
     static const std::unordered_map<std::string, MapMeta> meta = {
         {"player_house", {
             14, 11, 0, 0,
@@ -244,7 +234,7 @@ static const std::unordered_map<std::string, MapMeta>& getMapMeta() {
         {"front_yard", {
             25, 18, 0, 13,
             {{8, 0, 5, 1, "player_house", 5, 8}},
-            borderGrid({25, 18}),
+            std::vector<uint8_t>(25 * 18, 0),
             12, 8, false, true,
             {{2,2},{2,15},{6,2},{6,15},{10,2},{14,2},{18,2},{22,2},
              {10,15},{14,15},{18,15},{22,15},{4,8},{8,12},{20,10}},
@@ -710,11 +700,8 @@ void Map::generateMapTexture() {
 
         for (int ty = 0; ty < meta.height; ++ty) {
             for (int tx = 0; tx < meta.width; ++tx) {
-                bool blocked = meta.blocked[ty * meta.width + tx] != 0;
-                uint8_t r, g, b;
-                if (blocked) { r = 55; g = 42; b = 25; }
-                else { r = 110; g = 82; b = 50; }
-                if (isCurrent && !blocked) { r += 20; g += 15; b += 10; }
+                uint8_t r = 110, g = 82, b = 50;
+                if (isCurrent) { r += 20; g += 15; b += 10; }
                 for (int dy = 0; dy < PIX_PER_TILE; ++dy) {
                     for (int dx = 0; dx < PIX_PER_TILE; ++dx) {
                         px(ox + tx * PIX_PER_TILE + dx, oy + ty * PIX_PER_TILE + dy, r, g, b);
@@ -770,8 +757,6 @@ void Map::generateMapTexture() {
     int cx1 = (curMeta.worldX + curMeta.width - minX) * PIX_PER_TILE - 1;
     int cy1 = (curMeta.worldY + curMeta.height - minY) * PIX_PER_TILE - 1;
     for (int x = cx0; x <= cx1; ++x) { px(x, cy0, 255, 220, 100); px(x, cy1, 255, 220, 100); }
-    for (int y = cy0; y <= cy1; ++y) { px(cx0, y, 255, 220, 100); px(cx1, y, 255, 220, 100); }
-
     m_mapOverlayTexture = new Texture(m_engine, pixels.data(), texW, texH);
 
     // Generate high-resolution room name label textures (with proper alpha for anti-aliasing)

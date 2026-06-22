@@ -60,14 +60,18 @@ bool Player::canMoveTo(float x, float z, const Map* map) const {
     float playerRight  = tx - halfWorld + vb.z * scale;
     float playerBottom = ty - halfWorld + vb.w * scale;
 
-    // Tile grid collision
+    // Tile grid collision (clamped to map bounds — OOB tiles are skipped)
     int tx1 = static_cast<int>(playerLeft) / static_cast<int>(tileSize);
     int ty1 = static_cast<int>(playerTop) / static_cast<int>(tileSize);
     int tx2 = static_cast<int>(playerRight) / static_cast<int>(tileSize);
     int ty2 = static_cast<int>(playerBottom) / static_cast<int>(tileSize);
+    int ttx1 = std::max(0, tx1);
+    int tty1 = std::max(0, ty1);
+    int ttx2 = std::min(map->width() - 1, tx2);
+    int tty2 = std::min(map->height() - 1, ty2);
 
-    for (int tty = ty1; tty <= ty2; ++tty) {
-        for (int ttx = tx1; ttx <= tx2; ++ttx) {
+    for (int tty = tty1; tty <= tty2; ++tty) {
+        for (int ttx = ttx1; ttx <= ttx2; ++ttx) {
             if (map->isTileBlocked(ttx, tty)) return false;
         }
     }
@@ -126,6 +130,14 @@ void Player::update(float deltaTime, const Map* currentMap) {
             m_position.z = newZ;
             m_moving = true;
         }
+    }
+
+    // Keep player within map bounds
+    if (currentMap) {
+        float hw = currentMap->width() * currentMap->tileSize() * 0.5f;
+        float hh = currentMap->height() * currentMap->tileSize() * 0.5f;
+        m_position.x = std::max(-hw, std::min(hw, m_position.x));
+        m_position.z = std::max(-hh, std::min(hh, m_position.z));
     }
 
     if (sPressed && (dPressed || aPressed)) {
