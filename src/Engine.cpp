@@ -175,6 +175,12 @@ void Engine::mainLoop() {
         if (currF1 && !prevF1) m_showCollisions = !m_showCollisions;
         prevF1 = currF1;
 
+        // Set sky color based on map (before render pass begins)
+        if (currentMap && currentMap->mapId() == "front_yard")
+            m_renderer->setClearColor(0.5f, 0.7f, 1.0f);
+        else
+            m_renderer->setClearColor(0.0f, 0.0f, 0.0f);
+
         if (m_renderer->beginFrame()) {
             if (currentMap) {
                 m_mapManager->render();

@@ -55,6 +55,7 @@ public:
     void drawDebugRect(const glm::vec3& position, const glm::vec2& scale, const glm::vec4& color);
     void drawDebugBox(const glm::vec3& min, const glm::vec3& max, const glm::vec4& color);
     void endFrame();
+    void setClearColor(float r, float g, float b);
 
     VkDescriptorPool& descriptorPool() { return m_descriptorPool; }
     VkDescriptorSetLayout& textureDescriptorLayout() { return m_textureDescriptorLayout; }
@@ -87,6 +88,7 @@ private:
 
     VkCommandBuffer m_currentCommandBuffer = VK_NULL_HANDLE;
     uint32_t m_imageIndex = 0;
+    float m_clearColor[4] = {0.0f, 0.0f, 0.0f, 1.0f};
 
     void createVertexBuffer();
     void createDebugPipeline();

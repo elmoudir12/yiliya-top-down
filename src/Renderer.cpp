@@ -211,7 +211,7 @@ bool Renderer::beginFrame() {
     renderPassInfo.renderArea.extent = extent;
 
     std::array<VkClearValue, 2> clearValues{};
-    clearValues[0].color = { {0.0f, 0.0f, 0.0f, 1.0f} };
+    clearValues[0].color = { {m_clearColor[0], m_clearColor[1], m_clearColor[2], m_clearColor[3]} };
     clearValues[1].depthStencil = { 1.0f, 0 };
     renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
     renderPassInfo.pClearValues = clearValues.data();
@@ -391,6 +391,12 @@ void Renderer::endFrame() {
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
         m_engine->recreateSwapChain();
     }
+}
+
+void Renderer::setClearColor(float r, float g, float b) {
+    m_clearColor[0] = r;
+    m_clearColor[1] = g;
+    m_clearColor[2] = b;
 }
 
 void Renderer::createDebugPipeline() {
