@@ -292,15 +292,15 @@ void Map::buildWalls() {
     std::vector<uint16_t> idxs;
 
     auto addWallQuad = [&](const glm::vec3& a, const glm::vec3& b,
-                            const glm::vec3& c, const glm::vec3& d) {
+                            const glm::vec3& c, const glm::vec3& d,
+                            float vFloor = 1.0f, float vCeil = 0.0f) {
         float horiz = glm::distance(a, b);
         float uEnd = horiz / 64.0f;
         uint32_t base = static_cast<uint32_t>(verts.size());
-        // V: 1 at floor (y=0), 0 at ceiling (y=wh) → wainscoting at floor, top rail at ceiling
-        verts.push_back({a, {0.0f, 1.0f}});
-        verts.push_back({b, {uEnd, 1.0f}});
-        verts.push_back({c, {uEnd, 0.0f}});
-        verts.push_back({d, {0.0f, 0.0f}});
+        verts.push_back({a, {0.0f, vFloor}});
+        verts.push_back({b, {uEnd, vFloor}});
+        verts.push_back({c, {uEnd, vCeil}});
+        verts.push_back({d, {0.0f, vCeil}});
         idxs.push_back(base + 0); idxs.push_back(base + 1); idxs.push_back(base + 2);
         idxs.push_back(base + 2); idxs.push_back(base + 3); idxs.push_back(base + 0);
     };
@@ -341,8 +341,8 @@ void Map::buildWalls() {
         addWallQuad({x1, 0, z1}, {x0, 0, z1}, {x0, wh, z1}, {x1, wh, z1});
         // -Z face
         addWallQuad({x0, 0, z0}, {x1, 0, z0}, {x1, wh, z0}, {x0, wh, z0});
-        // top face
-        addWallQuad({x0, wh, z1}, {x1, wh, z1}, {x1, wh, z0}, {x0, wh, z0});
+        // top face — same wood texture as the wainscoting (V=0.5..0.9375)
+        addWallQuad({x0, wh, z1}, {x1, wh, z1}, {x1, wh, z0}, {x0, wh, z0}, 0.5f, 0.9375f);
     }
 
     m_wallMesh.indexCount = static_cast<uint32_t>(idxs.size());
