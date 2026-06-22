@@ -51,7 +51,7 @@ void Engine::initWindow() {
         if (engine->m_mouseDown) {
             double dx = x - engine->m_lastMouseX;
             double dy = y - engine->m_lastMouseY;
-            engine->m_camYaw += static_cast<float>(dx * 0.3);
+            engine->m_camYaw -= static_cast<float>(dx * 0.3);
             engine->m_camPitch += static_cast<float>(dy * 0.3);
             engine->m_camPitch = std::clamp(engine->m_camPitch, -89.0f, 89.0f);
         }
