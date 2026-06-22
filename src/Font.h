@@ -12,11 +12,14 @@ public:
 
     // Render text at the given pixel height. pixels must be pw*ph*4 bytes.
     // (x, y) is the top-left of the text box.
+    // supersample > 1 renders the glyphs at (pixelHeight * supersample) and
+    // averages them into the destination, producing smoother edges.
     // Returns true if any pixels were drawn.
     static bool renderText(uint8_t* pixels, int pw, int ph,
                            const char* text, int x, int y,
                            int pixelHeight,
-                           uint8_t r, uint8_t g, uint8_t b);
+                           uint8_t r, uint8_t g, uint8_t b,
+                           int supersample = 2);
 
     // Width of text at the given pixel height
     static int textWidth(const char* text, int pixelHeight);

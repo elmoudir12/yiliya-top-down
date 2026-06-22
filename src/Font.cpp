@@ -35,12 +35,65 @@ void Font::shutdown() {
 bool Font::renderText(uint8_t* pixels, int pw, int ph,
                        const char* text, int x, int y,
                        int pixelHeight,
-                       uint8_t r, uint8_t g, uint8_t b) {
+                       uint8_t r, uint8_t g, uint8_t b,
+                       int supersample) {
     if (!g_loaded) return false;
+    if (supersample < 1) supersample = 1;
 
-    float scale = stbtt_ScaleForPixelHeight(&g_font, (float)pixelHeight);
-    float posX = (float)x;
-    float posY = (float)y;
+    if (supersample == 1) {
+        // Original path: render at exact pixelHeight
+        float scale = stbtt_ScaleForPixelHeight(&g_font, (float)pixelHeight);
+        float posX = (float)x;
+        float posY = (float)y;
+        bool anyDrawn = false;
+
+        while (*text) {
+            unsigned char ch = (unsigned char)*text;
+            if (ch == ' ') {
+                int adv;
+                stbtt_GetCodepointHMetrics(&g_font, ' ', &adv, nullptr);
+                posX += adv * scale;
+            } else if (ch >= 32) {
+                int adv, lsb;
+                stbtt_GetCodepointHMetrics(&g_font, ch, &adv, &lsb);
+                int cw, chh, xOff, yOff;
+                unsigned char* bm = stbtt_GetCodepointBitmap(&g_font, scale, scale, ch, &cw, &chh, &xOff, &yOff);
+                if (bm) {
+                    int bx0 = (int)(posX + lsb * scale + xOff);
+                    int by0 = (int)(posY + yOff);
+                    for (int by = 0; by < chh; ++by) {
+                        for (int bx = 0; bx < cw; ++bx) {
+                            int px = bx0 + bx, py = by0 + by;
+                            if (px >= 0 && px < pw && py >= 0 && py < ph) {
+                                int a = bm[by * cw + bx];
+                                if (a > 0) {
+                                    float f = a / 255.0f;
+                                    int i = (py * pw + px) * 4;
+                                    pixels[i+0] = (uint8_t)(r * f);
+                                    pixels[i+1] = (uint8_t)(g * f);
+                                    pixels[i+2] = (uint8_t)(b * f);
+                                    pixels[i+3] = (uint8_t)(255 * f);
+                                    anyDrawn = true;
+                                }
+                            }
+                        }
+                    }
+                    free(bm);
+                    posX += adv * scale;
+                }
+            }
+            ++text;
+        }
+        return anyDrawn;
+    }
+
+    // Supersampled path: render glyphs at (pixelHeight * supersample),
+    // accumulate coverage in a high-res buffer, then box-filter down
+    // into the destination buffer.
+    int hiH = pixelHeight * supersample;
+    float scale = stbtt_ScaleForPixelHeight(&g_font, (float)hiH);
+    float posX = (float)x * supersample;
+    float posY = (float)y * supersample;
     bool anyDrawn = false;
 
     while (*text) {
@@ -57,21 +110,31 @@ bool Font::renderText(uint8_t* pixels, int pw, int ph,
             if (bm) {
                 int bx0 = (int)(posX + lsb * scale + xOff);
                 int by0 = (int)(posY + yOff);
+                // Each glyph pixel covers a supersample x supersample block
+                // in the high-res grid; accumulate into the destination.
                 for (int by = 0; by < chh; ++by) {
                     for (int bx = 0; bx < cw; ++bx) {
-                        int px = bx0 + bx, py = by0 + by;
-                        if (px >= 0 && px < pw && py >= 0 && py < ph) {
-                            int a = bm[by * cw + bx];
-                            if (a > 0) {
-                                float f = a / 255.0f;
-                                int i = (py * pw + px) * 4;
-                                pixels[i+0] = (uint8_t)(r * f);
-                                pixels[i+1] = (uint8_t)(g * f);
-                                pixels[i+2] = (uint8_t)(b * f);
-                                pixels[i+3] = (uint8_t)(255 * f);
-                                anyDrawn = true;
-                            }
-                        }
+                        int a = bm[by * cw + bx];
+                        if (a == 0) continue;
+                        // Source pixel maps to destination pixel (bx0/SS, by0/SS).
+                        int dx = (bx0 + bx) / supersample;
+                        int dy = (by0 + by) / supersample;
+                        if (dx < 0 || dx >= pw || dy < 0 || dy >= ph) continue;
+
+                        float f = a / 255.0f;
+                        int i = (dy * pw + dx) * 4;
+                        // Source-aligned over-blend: scale by 1/SS^2 to integrate
+                        // the SSxSS sub-block, then add to existing alpha (cap 255).
+                        float contrib = f / (float)(supersample * supersample);
+                        float curA = pixels[i+3] / 255.0f;
+                        float newA = curA + contrib;
+                        if (newA > 1.0f) newA = 1.0f;
+                        // Color is "constant text color" blended over what's there
+                        pixels[i+0] = (uint8_t)(r * newA);
+                        pixels[i+1] = (uint8_t)(g * newA);
+                        pixels[i+2] = (uint8_t)(b * newA);
+                        pixels[i+3] = (uint8_t)(255 * newA);
+                        anyDrawn = true;
                     }
                 }
                 free(bm);

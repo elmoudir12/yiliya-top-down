@@ -143,6 +143,7 @@ private:
     // Main menu state
     bool m_showMenu = true;
     int m_menuSelection = 0;
+    float m_menuScrollAccum = 0.0f;
     static constexpr int MENU_OPTION_COUNT = 2;
     Texture* m_menuTitleTexture = nullptr;
     Texture* m_menuOptionTextures[MENU_OPTION_COUNT] = { nullptr, nullptr };

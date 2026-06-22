@@ -70,8 +70,13 @@ void Engine::initWindow() {
     glfwSetScrollCallback(m_window, [](GLFWwindow* window, double x, double y) {
         auto* engine = reinterpret_cast<Engine*>(glfwGetWindowUserPointer(window));
         if (!engine) return;
-        engine->m_camDistance -= static_cast<float>(y * 20.0f);
-        engine->m_camDistance = std::clamp(engine->m_camDistance, 100.0f, 1500.0f);
+        if (engine->m_showMenu) {
+            // While menu is open, scroll changes selection
+            engine->m_menuScrollAccum += static_cast<float>(y);
+        } else {
+            engine->m_camDistance -= static_cast<float>(y * 20.0f);
+            engine->m_camDistance = std::clamp(engine->m_camDistance, 100.0f, 1500.0f);
+        }
     });
 }
 
@@ -1256,11 +1261,12 @@ void Engine::loadMenuTextures() {
         int th = Font::textHeight(titleSize) + pad * 2;
         int baseline = pad + Font::ascent(titleSize);
         std::vector<uint8_t> pixels(tw * th * 4, 0);
-        // Drop shadow
-        Font::renderText(pixels.data(), tw, th, title, pad + 3, baseline + 3, titleSize, 30, 18, 8);
+        // Drop shadow (supersampled for smoother edges)
+        Font::renderText(pixels.data(), tw, th, title, pad + 3, baseline + 3, titleSize, 30, 18, 8, 3);
         // Main text
-        Font::renderText(pixels.data(), tw, th, title, pad, baseline, titleSize, 240, 220, 180);
+        Font::renderText(pixels.data(), tw, th, title, pad, baseline, titleSize, 240, 220, 180, 3);
         m_menuTitleTexture = new Texture(this, pixels.data(), tw, th);
+        m_menuTitleTexture->setFilter(VK_FILTER_LINEAR, VK_FILTER_LINEAR);
     }
 
     // ---- Options ----
@@ -1272,8 +1278,9 @@ void Engine::loadMenuTextures() {
     for (int i = 0; i < MENU_OPTION_COUNT; ++i) {
         int tw = Font::textWidth(options[i], optionSize) + optPad * 2;
         std::vector<uint8_t> pixels(tw * optTh * 4, 0);
-        Font::renderText(pixels.data(), tw, optTh, options[i], optPad, optBaseline, optionSize, 230, 220, 200);
+        Font::renderText(pixels.data(), tw, optTh, options[i], optPad, optBaseline, optionSize, 230, 220, 200, 3);
         m_menuOptionTextures[i] = new Texture(this, pixels.data(), tw, optTh);
+        m_menuOptionTextures[i]->setFilter(VK_FILTER_LINEAR, VK_FILTER_LINEAR);
     }
 
     // ---- Cursor (yellow triangle pointing right) ----
@@ -1322,6 +1329,22 @@ void Engine::handleMenuInput() {
     if (down && !prevDown) {
         m_menuSelection = (m_menuSelection + 1) % MENU_OPTION_COUNT;
     }
+
+    // Mouse wheel: scroll up moves selection up, scroll down moves it down.
+    // Use an accumulator so quick scrolls register as multiple steps.
+    if (m_menuScrollAccum >= 1.0f) {
+        int steps = (int)m_menuScrollAccum;
+        m_menuSelection = (m_menuSelection - steps + MENU_OPTION_COUNT * steps) % MENU_OPTION_COUNT;
+        m_menuScrollAccum -= steps;
+    } else if (m_menuScrollAccum <= -1.0f) {
+        int steps = -(int)m_menuScrollAccum;
+        m_menuSelection = (m_menuSelection + steps) % MENU_OPTION_COUNT;
+        m_menuScrollAccum += steps;
+    }
+    // Decay leftover fractional scroll so it doesn't accumulate forever
+    m_menuScrollAccum *= 0.5f;
+    if (std::abs(m_menuScrollAccum) < 0.01f) m_menuScrollAccum = 0.0f;
+
     if ((enter && !prevEnter) || (space && !prevSpace)) {
         switch (m_menuSelection) {
             case 0: // NEW GAME
