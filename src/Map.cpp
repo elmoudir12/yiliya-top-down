@@ -211,42 +211,106 @@ void Map::buildWalls() {
     float hw = m_width * m_tileSize * 0.5f;
     float hh = m_height * m_tileSize * 0.5f;
     float wh = WALL_HEIGHT;
-
-    struct WallQuad { float x0, z0, x1, z1; float y0, y1; };
-    WallQuad quads[4] = {
-        // north (z = -hh)
-        {-hw, -hh, hw, -hh, 0.0f, wh},
-        // south (z = hh)
-        {hw, hh, -hw, hh, 0.0f, wh},
-        // west (x = -hw)
-        {-hw, -hh, -hw, hh, 0.0f, wh},
-        // east (x = hw)
-        {hw, hh, hw, -hh, 0.0f, wh},
-    };
-
-    // Calculate total length to tile UV horizontally
-    float perim = 2.0f * (m_width + m_height) * m_tileSize;
+    float thick = 32.0f; // one tile thick
+    float ext = 16.0f;   // extend past corners to overlap
 
     std::vector<QuadVertex> verts;
     std::vector<uint16_t> idxs;
 
-    for (int i = 0; i < 4; ++i) {
-        auto& q = quads[i];
-        float len = glm::distance(glm::vec2(q.x0, q.z0), glm::vec2(q.x1, q.z1));
-        float cumLen = 0.0f;
-        for (int j = 0; j < i; ++j) {
-            cumLen += glm::distance(glm::vec2(quads[j].x0, quads[j].z0), glm::vec2(quads[j].x1, quads[j].z1));
-        }
-        float uStart = cumLen / perim;
-        float uEnd = (cumLen + len) / perim;
-
+    auto addQuad = [&](const glm::vec3& a, const glm::vec3& b,
+                        const glm::vec3& c, const glm::vec3& d,
+                        float uA, float uB, float uC, float uD,
+                        float vA, float vB, float vC, float vD) {
         uint32_t base = static_cast<uint32_t>(verts.size());
-        verts.push_back({{q.x0, q.y0, q.z0}, {uStart, v0}});
-        verts.push_back({{q.x1, q.y0, q.z1}, {uEnd, v0}});
-        verts.push_back({{q.x1, q.y1, q.z1}, {uEnd, v1}});
-        verts.push_back({{q.x0, q.y1, q.z0}, {uStart, v1}});
+        verts.push_back({a, {uA, vA}});
+        verts.push_back({b, {uB, vB}});
+        verts.push_back({c, {uC, vC}});
+        verts.push_back({d, {uD, vD}});
         idxs.push_back(base + 0); idxs.push_back(base + 1); idxs.push_back(base + 2);
         idxs.push_back(base + 2); idxs.push_back(base + 3); idxs.push_back(base + 0);
+    };
+
+    // Each wall: inner face, outer face, top face
+    // UV: inner/outer use full vertical tile, top UV uses v1 as bottom (same tile stretched)
+    // The four walls are defined so inner face always faces into the room
+
+    // North wall (z = -hh), extends from (-hw-ext, hw+ext)
+    {
+        float ix0 = -hw - ext, ix1 = hw + ext, iz = -hh;
+        float oz = -hh - thick;
+        // inner face (facing +Z into room)
+        addQuad({ix0, 0.0f, iz}, {ix1, 0.0f, iz}, {ix1, wh, iz}, {ix0, wh, iz},
+                0.0f, 1.0f, 1.0f, 0.0f, v0, v0, v1, v1);
+        // outer face (facing -Z)
+        addQuad({ix1, 0.0f, oz}, {ix0, 0.0f, oz}, {ix0, wh, oz}, {ix1, wh, oz},
+                0.0f, 1.0f, 1.0f, 0.0f, v0, v0, v1, v1);
+        // top face
+        addQuad({ix0, wh, oz}, {ix1, wh, oz}, {ix1, wh, iz}, {ix0, wh, iz},
+                0.0f, 1.0f, 1.0f, 0.0f, v0, v0, v1, v1);
+        // west end cap
+        addQuad({ix0, 0.0f, oz}, {ix0, 0.0f, iz}, {ix0, wh, iz}, {ix0, wh, oz},
+                0.0f, 1.0f, 1.0f, 0.0f, v0, v0, v1, v1);
+        // east end cap
+        addQuad({ix1, 0.0f, iz}, {ix1, 0.0f, oz}, {ix1, wh, oz}, {ix1, wh, iz},
+                0.0f, 1.0f, 1.0f, 0.0f, v0, v0, v1, v1);
+    }
+
+    // South wall (z = hh)
+    {
+        float ix0 = hw + ext, ix1 = -hw - ext, iz = hh;
+        float oz = hh + thick;
+        addQuad({ix0, 0.0f, iz}, {ix1, 0.0f, iz}, {ix1, wh, iz}, {ix0, wh, iz},
+                0.0f, 1.0f, 1.0f, 0.0f, v0, v0, v1, v1);
+        addQuad({ix1, 0.0f, oz}, {ix0, 0.0f, oz}, {ix0, wh, oz}, {ix1, wh, oz},
+                0.0f, 1.0f, 1.0f, 0.0f, v0, v0, v1, v1);
+        addQuad({ix0, wh, oz}, {ix1, wh, oz}, {ix1, wh, iz}, {ix0, wh, iz},
+                0.0f, 1.0f, 1.0f, 0.0f, v0, v0, v1, v1);
+        // west end cap
+        addQuad({ix0, 0.0f, iz}, {ix0, 0.0f, oz}, {ix0, wh, oz}, {ix0, wh, iz},
+                0.0f, 1.0f, 1.0f, 0.0f, v0, v0, v1, v1);
+        // east end cap
+        addQuad({ix1, 0.0f, oz}, {ix1, 0.0f, iz}, {ix1, wh, iz}, {ix1, wh, oz},
+                0.0f, 1.0f, 1.0f, 0.0f, v0, v0, v1, v1);
+    }
+
+    // West wall (x = -hw)
+    {
+        float iz0 = hh + ext, iz1 = -hh - ext, ix = -hw, ox = ix - thick;
+        // inner face (facing +X into room)
+        addQuad({ix, 0.0f, iz0}, {ix, 0.0f, iz1}, {ix, wh, iz1}, {ix, wh, iz0},
+                0.0f, 1.0f, 1.0f, 0.0f, v0, v0, v1, v1);
+        // outer face (facing -X)
+        addQuad({ox, 0.0f, iz0}, {ox, 0.0f, iz1}, {ox, wh, iz1}, {ox, wh, iz0},
+                0.0f, 1.0f, 1.0f, 0.0f, v0, v0, v1, v1);
+        // top face
+        addQuad({ox, wh, iz0}, {ix, wh, iz0}, {ix, wh, iz1}, {ox, wh, iz1},
+                0.0f, 1.0f, 1.0f, 0.0f, v0, v0, v1, v1);
+        // north end cap (facing -Z)
+        addQuad({ix, 0.0f, iz1}, {ox, 0.0f, iz1}, {ox, wh, iz1}, {ix, wh, iz1},
+                0.0f, 1.0f, 1.0f, 0.0f, v0, v0, v1, v1);
+        // south end cap (facing +Z)
+        addQuad({ox, 0.0f, iz0}, {ix, 0.0f, iz0}, {ix, wh, iz0}, {ox, wh, iz0},
+                0.0f, 1.0f, 1.0f, 0.0f, v0, v0, v1, v1);
+    }
+
+    // East wall (x = hw)
+    {
+        float iz0 = -hh - ext, iz1 = hh + ext, ix = hw, ox = ix + thick;
+        // inner face (facing -X into room)
+        addQuad({ix, 0.0f, iz0}, {ix, 0.0f, iz1}, {ix, wh, iz1}, {ix, wh, iz0},
+                0.0f, 1.0f, 1.0f, 0.0f, v0, v0, v1, v1);
+        // outer face (facing +X)
+        addQuad({ox, 0.0f, iz0}, {ox, 0.0f, iz1}, {ox, wh, iz1}, {ox, wh, iz0},
+                0.0f, 1.0f, 1.0f, 0.0f, v0, v0, v1, v1);
+        // top face
+        addQuad({ix, wh, iz0}, {ox, wh, iz0}, {ox, wh, iz1}, {ix, wh, iz1},
+                0.0f, 1.0f, 1.0f, 0.0f, v0, v0, v1, v1);
+        // north end cap (facing -Z)
+        addQuad({ox, 0.0f, iz0}, {ix, 0.0f, iz0}, {ix, wh, iz0}, {ox, wh, iz0},
+                0.0f, 1.0f, 1.0f, 0.0f, v0, v0, v1, v1);
+        // south end cap (facing +Z)
+        addQuad({ix, 0.0f, iz1}, {ox, 0.0f, iz1}, {ox, wh, iz1}, {ix, wh, iz1},
+                0.0f, 1.0f, 1.0f, 0.0f, v0, v0, v1, v1);
     }
 
     m_wallMesh.indexCount = static_cast<uint32_t>(idxs.size());
