@@ -129,25 +129,22 @@ void Engine::mainLoop() {
                 float ts = static_cast<float>(currentMap->tileSize());
                 int w = currentMap->width();
                 int h = currentMap->height();
-                const auto& groundTiles = currentMap->groundTiles();
                 for (int ty = 0; ty < h; ++ty) {
                     for (int tx = 0; tx < w; ++tx) {
-                        int idx = ty * w + tx;
-                        if (idx < (int)groundTiles.size() && currentMap->isTileBlocked(tx, ty)) {
-                            glm::vec2 pos(tx * ts, ty * ts);
-                            m_renderer->drawDebugRect(pos, glm::vec2(ts), glm::vec4(1.0f, 0.0f, 0.0f, 0.4f));
+                        if (currentMap->isTileBlocked(tx, ty)) {
+                            glm::vec2 center(tx * ts + ts / 2.0f, ty * ts + ts / 2.0f);
+                            m_renderer->drawDebugRect(center, glm::vec2(ts), glm::vec4(1.0f, 0.0f, 0.0f, 0.4f));
                         }
                     }
                 }
                 for (const auto& rect : currentMap->collisionRects()) {
-                    glm::vec2 pos(rect.x, rect.y);
-                    glm::vec2 scale(rect.w, rect.h);
-                    m_renderer->drawDebugRect(pos, scale, glm::vec4(1.0f, 0.0f, 0.0f, 0.6f));
+                    glm::vec2 center(rect.x + rect.w / 2.0f, rect.y + rect.h / 2.0f);
+                    m_renderer->drawDebugRect(center, glm::vec2(rect.w, rect.h), glm::vec4(1.0f, 0.0f, 0.0f, 0.6f));
                 }
                 // Player hitbox
                 glm::vec2 ppos = m_player->position();
                 m_renderer->drawDebugRect(
-                    glm::vec2(ppos.x - 10.0f, ppos.y + 9.0f),
+                    glm::vec2(ppos.x, ppos.y + 16.0f),
                     glm::vec2(20.0f, 14.0f),
                     glm::vec4(0.0f, 1.0f, 0.0f, 0.6f));
             }
