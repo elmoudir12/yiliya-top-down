@@ -280,7 +280,7 @@ void Engine::mainLoop() {
         prevM = currM;
 
         if (m_showMenu) {
-            m_renderer->setClearColor(0.05f, 0.04f, 0.08f);
+            m_renderer->setClearColor(0.0f, 0.0f, 0.0f);
         } else if (m_showMap && currentMap) {
             m_renderer->setClearColor(0.0f, 0.0f, 0.0f);
             // Switch to orthographic projection for 2D overlay
@@ -1310,67 +1310,12 @@ void Engine::loadMenuTextures() {
         }
         m_menuCursorTexture = new Texture(this, pixels.data(), S, S);
     }
-
-    // ---- Menu border (thick brown wood-like border) ----
-    {
-        const int W = 700, H = 460;
-        std::vector<uint8_t> pixels(W * H * 4, 0);
-        for (int y = 0; y < H; ++y) {
-            for (int x = 0; x < W; ++x) {
-                pixels[(y * W + x) * 4 + 0] = 50;
-                pixels[(y * W + x) * 4 + 1] = 35;
-                pixels[(y * W + x) * 4 + 2] = 22;
-                pixels[(y * W + x) * 4 + 3] = 255;
-            }
-        }
-        const int border = 8;
-        for (int y = 0; y < H; ++y) {
-            for (int x = 0; x < W; ++x) {
-                bool onBorder = (x < border || x >= W - border || y < border || y >= H - border);
-                if (onBorder) {
-                    pixels[(y * W + x) * 4 + 0] = 110;
-                    pixels[(y * W + x) * 4 + 1] = 75;
-                    pixels[(y * W + x) * 4 + 2] = 45;
-                }
-            }
-        }
-        for (int y = border; y < H - border; ++y) {
-            for (int x = border; x < W - border; ++x) {
-                if (x == border || x == W - border - 1 || y == border || y == H - border - 1) {
-                    pixels[(y * W + x) * 4 + 0] = 80;
-                    pixels[(y * W + x) * 4 + 1] = 55;
-                    pixels[(y * W + x) * 4 + 2] = 30;
-                }
-            }
-        }
-        m_menuBorderTexture = new Texture(this, pixels.data(), W, H);
-    }
-
-    // ---- Panel fill (interior, no border) ----
-    {
-        const int W = 700, H = 460;
-        const int border = 8;
-        const int innerW = W - 2 * border;
-        const int innerH = H - 2 * border;
-        std::vector<uint8_t> pixels(innerW * innerH * 4, 0);
-        for (int y = 0; y < innerH; ++y) {
-            for (int x = 0; x < innerW; ++x) {
-                pixels[(y * innerW + x) * 4 + 0] = 38;
-                pixels[(y * innerW + x) * 4 + 1] = 26;
-                pixels[(y * innerW + x) * 4 + 2] = 16;
-                pixels[(y * innerW + x) * 4 + 3] = 255;
-            }
-        }
-        m_menuPanelTexture = new Texture(this, pixels.data(), innerW, innerH);
-    }
 }
 
 void Engine::destroyMenuTextures() {
     if (m_menuTitleTexture) { delete m_menuTitleTexture; m_menuTitleTexture = nullptr; }
     if (m_menuSubtitleTexture) { delete m_menuSubtitleTexture; m_menuSubtitleTexture = nullptr; }
     if (m_menuCursorTexture) { delete m_menuCursorTexture; m_menuCursorTexture = nullptr; }
-    if (m_menuBorderTexture) { delete m_menuBorderTexture; m_menuBorderTexture = nullptr; }
-    if (m_menuPanelTexture) { delete m_menuPanelTexture; m_menuPanelTexture = nullptr; }
     for (int i = 0; i < MENU_OPTION_COUNT; ++i) {
         if (m_menuOptionTextures[i]) { delete m_menuOptionTextures[i]; m_menuOptionTextures[i] = nullptr; }
     }
@@ -1441,36 +1386,30 @@ void Engine::renderMenu() {
         m_renderer->drawSprite3D(tex->descriptorSet(), model);
     };
 
-    // Window size and position (centered)
-    const int winW = 700, winH = 460;
-    const int winX = (ext.width - winW) / 2;
-    const int winY = (ext.height - winH) / 2;
-
-    // Draw the border (includes interior)
-    drawPx(m_menuBorderTexture, winX, winY, winW, winH);
-
-    // Title at top of window
+    // Title at top center of screen
     if (m_menuTitleTexture) {
         glm::vec2 ts = m_menuTitleTexture->size();
-        float scale = (float)winW * 0.75f / ts.x;
+        float scale = (float)ext.width * 0.40f / ts.x;
         float drawPxW = ts.x * scale;
         float drawPxH = ts.y * scale;
-        float tx = winX + (winW - drawPxW) / 2.0f;
-        float ty = winY + 30.0f;
+        float tx = (ext.width - drawPxW) / 2.0f;
+        float ty = ext.height * 0.18f;
         drawPx(m_menuTitleTexture, tx, ty, drawPxW, drawPxH);
     }
 
-    // Options
-    const float optionSpacing = 75.0f;
-    const float optionsStartY = winY + 200.0f;
+    // Options centered vertically
+    const int optionSize = 28;
+    const float optionSpacing = 65.0f;
+    const float optionsStartY = ext.height * 0.45f;
+    const float optionScale = (float)ext.width * 0.18f / Font::textWidth("CONTINUE", optionSize);
     for (int i = 0; i < MENU_OPTION_COUNT; ++i) {
         if (!m_menuOptionTextures[i]) continue;
         glm::vec2 os = m_menuOptionTextures[i]->size();
         bool selected = (i == m_menuSelection);
-        float scale = (float)winW * 0.55f / os.x * (selected ? 1.10f : 1.0f);
+        float scale = optionScale * (selected ? 1.15f : 1.0f);
         float drawPxW = os.x * scale;
         float drawPxH = os.y * scale;
-        float ox = winX + (winW - drawPxW) / 2.0f;
+        float ox = (ext.width - drawPxW) / 2.0f;
         float oy = optionsStartY + i * optionSpacing;
 
         drawPx(m_menuOptionTextures[i], ox, oy, drawPxW, drawPxH);
@@ -1487,14 +1426,14 @@ void Engine::renderMenu() {
         }
     }
 
-    // Subtitle at bottom
+    // Subtitle at bottom of screen
     if (m_menuSubtitleTexture) {
         glm::vec2 ss = m_menuSubtitleTexture->size();
-        float scale = (float)winW * 0.55f / ss.x;
+        float scale = (float)ext.width * 0.22f / ss.x;
         float drawPxW = ss.x * scale;
         float drawPxH = ss.y * scale;
-        float sx = winX + (winW - drawPxW) / 2.0f;
-        float sy = winY + winH - drawPxH - 30.0f;
+        float sx = (ext.width - drawPxW) / 2.0f;
+        float sy = ext.height * 0.85f;
         drawPx(m_menuSubtitleTexture, sx, sy, drawPxW, drawPxH);
     }
 }
