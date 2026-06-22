@@ -71,17 +71,20 @@ private:
     std::vector<Transition> m_transitions;
     std::vector<CollisionRect> m_collisionRects;
     std::vector<CollisionRect> m_wallCollisionRects;
-    std::vector<LayerMesh> m_layerMeshes;
     LayerMesh m_wallMesh;
+    LayerMesh m_floorTopMesh;
+    LayerMesh m_floorBottomMesh;
     int m_spawnTileX = 0, m_spawnTileY = 0;
 
     Texture* m_tilesetTexture = nullptr;
     Texture* m_wallTexture = nullptr;
+    Texture* m_floorTexture = nullptr;
 
     static constexpr float WALL_HEIGHT = 64.0f;
     static constexpr float WALL_THICK = 32.0f;
 
-    void buildMeshForLayer(const std::vector<int>& tiles, LayerMesh& mesh);
+    void buildFloorTop();
+    void buildFloorBottom();
     void buildWalls();
     void destroyMesh(LayerMesh& mesh);
 };

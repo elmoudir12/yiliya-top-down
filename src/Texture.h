@@ -16,8 +16,8 @@ public:
 
     VkDescriptorSet descriptorSet() const { return m_descriptorSet; }
     glm::vec2 size() const { return m_size; }
-    // Pixel-perfect visible bounds (left, top, right, bottom) in texel coords
     glm::vec4 visibleBounds() const { return m_visibleBounds; }
+    void setAddressMode(VkSamplerAddressMode u, VkSamplerAddressMode v);
 
 private:
     Engine* m_engine;

@@ -138,6 +138,19 @@ void Texture::createTextureSampler() {
     }
 }
 
+void Texture::setAddressMode(VkSamplerAddressMode u, VkSamplerAddressMode v) {
+    m_addressModeU = u;
+    m_addressModeV = v;
+    VkDevice dev = m_engine->device();
+    if (m_sampler) vkDestroySampler(dev, m_sampler, nullptr);
+    if (m_descriptorSet) {
+        vkFreeDescriptorSets(dev, m_engine->renderer()->descriptorPool(), 1, &m_descriptorSet);
+        m_descriptorSet = VK_NULL_HANDLE;
+    }
+    createTextureSampler();
+    updateDescriptorSet();
+}
+
 void Texture::updateDescriptorSet() {
     VkDescriptorSetLayout texLayout = m_engine->renderer()->textureDescriptorLayout();
     VkDescriptorSetAllocateInfo allocInfo{};

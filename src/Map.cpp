@@ -13,6 +13,43 @@ int Map::s_tilesetRefCount = 0;
 
 static const int TILE_PX = 32;
 
+static Texture* createWoodFloorTexture(Engine* engine) {
+    const int S = 32;
+    std::vector<uint8_t> p(S * S * 4, 255);
+    auto clamp8 = [](int v) { return static_cast<uint8_t>(v < 0 ? 0 : v > 255 ? 255 : v); };
+    auto wr = [](int v) { return v & 31; };
+    auto hash = [](int x, int y) -> int {
+        unsigned h = (unsigned)(x * 374761393 + y * 668265263);
+        h = (h ^ (h >> 13)) * 1274126177u;
+        return (int)((h ^ (h >> 16)) & 0xFF);
+    };
+    for (int y = 0; y < S; ++y) {
+        for (int x = 0; x < S; ++x) {
+            // Plank seam at top and bottom edges for seamless vertical tiling
+            bool seam = (y < 2 || y >= 30);
+            if (seam) {
+                p[(y * S + x) * 4 + 0] = 55;
+                p[(y * S + x) * 4 + 1] = 35;
+                p[(y * S + x) * 4 + 2] = 12;
+                p[(y * S + x) * 4 + 3] = 255;
+                continue;
+            }
+            // Wood grain from hash (wraps at 32 so seamless)
+            int g = (hash(x, y) % 11) - 5;
+            int streak = hash(x, wr(y & ~3)) % 9 - 4;
+            int r = 175 + g * 3 + streak * 4;
+            int g_ = 112 + g * 2 + streak * 3;
+            int b = 58 + g + streak * 2;
+            p[(y * S + x) * 4 + 0] = clamp8(r);
+            p[(y * S + x) * 4 + 1] = clamp8(g_);
+            p[(y * S + x) * 4 + 2] = clamp8(b);
+            p[(y * S + x) * 4 + 3] = 255;
+        }
+    }
+    return new Texture(engine, p.data(), S, S,
+        VK_SAMPLER_ADDRESS_MODE_REPEAT, VK_SAMPLER_ADDRESS_MODE_REPEAT);
+}
+
 static Texture* createTimberTexture(Engine* engine) {
     const int W = 128, H = 128;
     std::vector<uint8_t> p(W * H * 4, 255);
@@ -112,6 +149,7 @@ Map::Map(Engine* engine, Renderer* renderer)
     : m_engine(engine), m_renderer(renderer) {
     if (!s_tilesetTexture) {
         s_tilesetTexture = new Texture(m_engine, "assets/tiles/tileset.png");
+        s_tilesetTexture->setAddressMode(VK_SAMPLER_ADDRESS_MODE_REPEAT, VK_SAMPLER_ADDRESS_MODE_REPEAT);
     }
     ++s_tilesetRefCount;
     m_tilesetTexture = s_tilesetTexture;
@@ -156,25 +194,26 @@ void Map::load(const std::string& mapName) {
         m_spawnTileY = m_height / 2;
     }
 
-    // Build mesh for each layer
-    m_layerMeshes.resize(m_tileLayers.size());
-    for (size_t i = 0; i < m_tileLayers.size(); ++i) {
-        buildMeshForLayer(m_tileLayers[i], m_layerMeshes[i]);
-    }
-
     if (!m_wallTexture) {
         m_wallTexture = createTimberTexture(m_engine);
     }
+    if (!m_floorTexture) {
+        m_floorTexture = createWoodFloorTexture(m_engine);
+    }
 
+    buildFloorTop();
+    buildFloorBottom();
     buildWalls();
 }
 
 void Map::unload() {
-    for (auto& mesh : m_layerMeshes) {
-        destroyMesh(mesh);
-    }
-    m_layerMeshes.clear();
     destroyMesh(m_wallMesh);
+    destroyMesh(m_floorTopMesh);
+    destroyMesh(m_floorBottomMesh);
+    if (m_floorTexture) {
+        delete m_floorTexture;
+        m_floorTexture = nullptr;
+    }
     if (m_wallTexture) {
         delete m_wallTexture;
         m_wallTexture = nullptr;
@@ -208,78 +247,60 @@ void Map::destroyMesh(LayerMesh& mesh) {
     mesh.indexCount = 0;
 }
 
-void Map::buildMeshForLayer(const std::vector<int>& tiles, LayerMesh& mesh) {
-    int numTiles = m_width * m_height;
-    if (numTiles == 0) return;
-
-    glm::vec2 texSize = m_tilesetTexture->size();
-    float texW = texSize.x;
-    float texH = texSize.y;
-
+void Map::buildFloorTop() {
     float hw = m_width * m_tileSize * 0.5f;
     float hh = m_height * m_tileSize * 0.5f;
-
-    std::vector<QuadVertex> vertices;
-    std::vector<uint16_t> indices;
-    vertices.reserve(numTiles * 4);
-    indices.reserve(numTiles * 6);
-
-    for (int ty = 0; ty < m_height; ++ty) {
-        for (int tx = 0; tx < m_width; ++tx) {
-            int tileIdx = tiles[ty * m_width + tx];
-            if (tileIdx == 324) continue;
-
-            int srcCol = tileIdx % m_tilesetCols;
-            int srcRow = tileIdx / m_tilesetCols;
-
-            float u0 = (srcCol * TILE_PX) / texW;
-            float v0 = (srcRow * TILE_PX) / texH;
-            float u1 = ((srcCol + 1) * TILE_PX) / texW;
-            float v1 = ((srcRow + 1) * TILE_PX) / texH;
-
-            float x0 = static_cast<float>(tx * m_tileSize) - hw;
-            float z0 = static_cast<float>(ty * m_tileSize) - hh;
-            float x1 = x0 + m_tileSize;
-            float z1 = z0 + m_tileSize;
-
-            uint32_t base = static_cast<uint32_t>(vertices.size());
-            vertices.push_back({{x0, 0.0f, z0}, {u0, v0}});
-            vertices.push_back({{x1, 0.0f, z0}, {u1, v0}});
-            vertices.push_back({{x1, 0.0f, z1}, {u1, v1}});
-            vertices.push_back({{x0, 0.0f, z1}, {u0, v1}});
-            indices.push_back(base + 0);
-            indices.push_back(base + 1);
-            indices.push_back(base + 2);
-            indices.push_back(base + 2);
-            indices.push_back(base + 3);
-            indices.push_back(base + 0);
-        }
-    }
-
-    mesh.indexCount = static_cast<uint32_t>(indices.size());
-    if (mesh.indexCount == 0) return;
-
-    VkDeviceSize vertexSize = sizeof(QuadVertex) * vertices.size();
-    VkDeviceSize indexSize = sizeof(uint16_t) * indices.size();
-
-    m_engine->createBuffer(vertexSize,
-        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+    QuadVertex verts[4] = {
+        {{-hw, 0.0f, -hh}, {0.0f,       0.0f}},
+        {{ hw, 0.0f, -hh}, {m_width,    0.0f}},
+        {{ hw, 0.0f,  hh}, {m_width,    m_height}},
+        {{-hw, 0.0f,  hh}, {0.0f,       m_height}},
+    };
+    uint16_t idxs[6] = {0, 1, 2, 2, 3, 0};
+    VkDeviceSize vsize = sizeof(verts);
+    VkDeviceSize isize = sizeof(idxs);
+    m_engine->createBuffer(vsize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        mesh.vertexBuffer, mesh.vertexBufferMemory);
-
+        m_floorTopMesh.vertexBuffer, m_floorTopMesh.vertexBufferMemory);
     void* data;
-    vkMapMemory(m_engine->device(), mesh.vertexBufferMemory, 0, vertexSize, 0, &data);
-    memcpy(data, vertices.data(), vertexSize);
-    vkUnmapMemory(m_engine->device(), mesh.vertexBufferMemory);
-
-    m_engine->createBuffer(indexSize,
-        VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+    vkMapMemory(m_engine->device(), m_floorTopMesh.vertexBufferMemory, 0, vsize, 0, &data);
+    memcpy(data, verts, vsize);
+    vkUnmapMemory(m_engine->device(), m_floorTopMesh.vertexBufferMemory);
+    m_engine->createBuffer(isize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        mesh.indexBuffer, mesh.indexBufferMemory);
+        m_floorTopMesh.indexBuffer, m_floorTopMesh.indexBufferMemory);
+    vkMapMemory(m_engine->device(), m_floorTopMesh.indexBufferMemory, 0, isize, 0, &data);
+    memcpy(data, idxs, isize);
+    vkUnmapMemory(m_engine->device(), m_floorTopMesh.indexBufferMemory);
+    m_floorTopMesh.indexCount = 6;
+}
 
-    vkMapMemory(m_engine->device(), mesh.indexBufferMemory, 0, indexSize, 0, &data);
-    memcpy(data, indices.data(), indexSize);
-    vkUnmapMemory(m_engine->device(), mesh.indexBufferMemory);
+void Map::buildFloorBottom() {
+    float hw = m_width * m_tileSize * 0.5f;
+    float hh = m_height * m_tileSize * 0.5f;
+    QuadVertex verts[4] = {
+        {{-hw, -1.0f, -hh}, {0.0f,       0.0f}},
+        {{ hw, -1.0f, -hh}, {m_width,    0.0f}},
+        {{ hw, -1.0f,  hh}, {m_width,    m_height}},
+        {{-hw, -1.0f,  hh}, {0.0f,       m_height}},
+    };
+    uint16_t idxs[6] = {0, 1, 2, 2, 3, 0};
+    VkDeviceSize vsize = sizeof(verts);
+    VkDeviceSize isize = sizeof(idxs);
+    m_engine->createBuffer(vsize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        m_floorBottomMesh.vertexBuffer, m_floorBottomMesh.vertexBufferMemory);
+    void* data;
+    vkMapMemory(m_engine->device(), m_floorBottomMesh.vertexBufferMemory, 0, vsize, 0, &data);
+    memcpy(data, verts, vsize);
+    vkUnmapMemory(m_engine->device(), m_floorBottomMesh.vertexBufferMemory);
+    m_engine->createBuffer(isize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        m_floorBottomMesh.indexBuffer, m_floorBottomMesh.indexBufferMemory);
+    vkMapMemory(m_engine->device(), m_floorBottomMesh.indexBufferMemory, 0, isize, 0, &data);
+    memcpy(data, idxs, isize);
+    vkUnmapMemory(m_engine->device(), m_floorBottomMesh.indexBufferMemory);
+    m_floorBottomMesh.indexCount = 6;
 }
 
 void Map::buildWalls() {
@@ -387,11 +408,15 @@ Map::Transition* Map::checkTransition(int tileX, int tileY) {
 
 void Map::render() {
     if (!m_tilesetTexture) return;
-    for (auto& mesh : m_layerMeshes) {
-        if (mesh.indexCount > 0) {
-            m_renderer->drawTilemap(m_tilesetTexture->descriptorSet(),
-                mesh.vertexBuffer, mesh.indexBuffer, mesh.indexCount);
-        }
+    if (m_floorTopMesh.indexCount > 0 && m_floorTexture) {
+        m_renderer->drawTilemap(m_floorTexture->descriptorSet(),
+            m_floorTopMesh.vertexBuffer, m_floorTopMesh.indexBuffer,
+            m_floorTopMesh.indexCount);
+    }
+    if (m_floorBottomMesh.indexCount > 0 && m_floorTexture) {
+        m_renderer->drawTilemap(m_floorTexture->descriptorSet(),
+            m_floorBottomMesh.vertexBuffer, m_floorBottomMesh.indexBuffer,
+            m_floorBottomMesh.indexCount);
     }
     if (m_wallMesh.indexCount > 0 && m_wallTexture) {
         m_renderer->drawTilemap(m_wallTexture->descriptorSet(),
