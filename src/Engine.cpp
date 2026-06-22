@@ -1264,7 +1264,7 @@ void Engine::loadMenuTextures() {
     }
 
     // ---- Options ----
-    const char* options[MENU_OPTION_COUNT] = { "NEW GAME", "CONTINUE", "QUIT" };
+    const char* options[MENU_OPTION_COUNT] = { "NEW GAME", "QUIT" };
     int optionSize = 28;
     int optPad = 4;
     int optTh = Font::textHeight(optionSize) + optPad * 2;
@@ -1274,19 +1274,6 @@ void Engine::loadMenuTextures() {
         std::vector<uint8_t> pixels(tw * optTh * 4, 0);
         Font::renderText(pixels.data(), tw, optTh, options[i], optPad, optBaseline, optionSize, 230, 220, 200);
         m_menuOptionTextures[i] = new Texture(this, pixels.data(), tw, optTh);
-    }
-
-    // ---- Subtitle ----
-    {
-        const char* sub = "PRESS ENTER TO SELECT";
-        int subSize = 20;
-        int subPad = 4;
-        int sw = Font::textWidth(sub, subSize) + subPad * 2;
-        int sh = Font::textHeight(subSize) + subPad * 2;
-        int subBaseline = subPad + Font::ascent(subSize);
-        std::vector<uint8_t> pixels(sw * sh * 4, 0);
-        Font::renderText(pixels.data(), sw, sh, sub, subPad, subBaseline, subSize, 200, 180, 140);
-        m_menuSubtitleTexture = new Texture(this, pixels.data(), sw, sh);
     }
 
     // ---- Cursor (yellow triangle pointing right) ----
@@ -1341,10 +1328,7 @@ void Engine::handleMenuInput() {
                 m_showMenu = false;
                 m_mapManager->loadMap("player_house");
                 break;
-            case 1: // CONTINUE (same as new game for now)
-                m_showMenu = false;
-                break;
-            case 2: // QUIT
+            case 1: // QUIT
                 glfwSetWindowShouldClose(m_window, GLFW_TRUE);
                 break;
         }
@@ -1389,9 +1373,10 @@ void Engine::renderMenu() {
     // Title at top center of screen
     if (m_menuTitleTexture) {
         glm::vec2 ts = m_menuTitleTexture->size();
-        float scale = (float)ext.width * 0.40f / ts.x;
-        float drawPxW = ts.x * scale;
-        float drawPxH = ts.y * scale;
+        // Cap title width at 50% of screen or 600px, whichever is smaller
+        float titleScale = std::min(ext.width * 0.50f, 600.0f) / ts.x;
+        float drawPxW = ts.x * titleScale;
+        float drawPxH = ts.y * titleScale;
         float tx = (ext.width - drawPxW) / 2.0f;
         float ty = ext.height * 0.18f;
         drawPx(m_menuTitleTexture, tx, ty, drawPxW, drawPxH);
@@ -1399,9 +1384,13 @@ void Engine::renderMenu() {
 
     // Options centered vertically
     const int optionSize = 28;
-    const float optionSpacing = 65.0f;
-    const float optionsStartY = ext.height * 0.45f;
-    const float optionScale = (float)ext.width * 0.18f / Font::textWidth("CONTINUE", optionSize);
+    // Fixed pixel size for options (scaled to a comfortable size)
+    const float targetOptionPx = std::min(ext.width * 0.18f, 240.0f);
+    const float optionScale = targetOptionPx / Font::textWidth("NEW GAME", optionSize);
+    // Get a representative option height for spacing
+    float representativeOptionH = m_menuOptionTextures[0] ? m_menuOptionTextures[0]->size().y * optionScale : 36.0f;
+    const float optionSpacing = representativeOptionH * 1.6f;
+    const float optionsStartY = (ext.height - optionSpacing * (MENU_OPTION_COUNT - 1)) * 0.5f;
     for (int i = 0; i < MENU_OPTION_COUNT; ++i) {
         if (!m_menuOptionTextures[i]) continue;
         glm::vec2 os = m_menuOptionTextures[i]->size();
@@ -1424,16 +1413,5 @@ void Engine::renderMenu() {
             float curY = oy + (drawPxH - curPxH) / 2.0f;
             drawPx(m_menuCursorTexture, curX, curY, curPxW, curPxH);
         }
-    }
-
-    // Subtitle at bottom of screen
-    if (m_menuSubtitleTexture) {
-        glm::vec2 ss = m_menuSubtitleTexture->size();
-        float scale = (float)ext.width * 0.22f / ss.x;
-        float drawPxW = ss.x * scale;
-        float drawPxH = ss.y * scale;
-        float sx = (ext.width - drawPxW) / 2.0f;
-        float sy = ext.height * 0.85f;
-        drawPx(m_menuSubtitleTexture, sx, sy, drawPxW, drawPxH);
     }
 }
