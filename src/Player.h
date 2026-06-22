@@ -36,6 +36,7 @@ private:
 
     glm::vec3 m_position{ 0.0f, 0.0f, 0.0f };
     Direction m_direction = Direction::Front;
+    float m_facingAngle = 0.0f; // character's world-facing angle (degrees, 0 = -Z)
     int m_frame = 0;
     float m_animTimer = 0.0f;
     bool m_moving = false;
@@ -48,4 +49,5 @@ private:
     void loadTextures();
     int directionIndex(Direction dir) const;
     bool canMoveTo(float x, float z, const Map* map) const;
+    Direction idleDirection() const;
 };

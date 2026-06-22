@@ -124,14 +124,19 @@ void Player::update(float deltaTime, const Map* currentMap) {
 
     if (sPressed && (dPressed || aPressed)) {
         m_direction = Direction::Front;
+        m_facingAngle = m_engine->cameraYaw() + 180.0f;
     } else if (wPressed) {
         m_direction = Direction::Back;
+        m_facingAngle = m_engine->cameraYaw();
     } else if (sPressed) {
         m_direction = Direction::Front;
+        m_facingAngle = m_engine->cameraYaw() + 180.0f;
     } else if (aPressed) {
         m_direction = Direction::Left;
+        m_facingAngle = m_engine->cameraYaw() + 90.0f;
     } else if (dPressed) {
         m_direction = Direction::Right;
+        m_facingAngle = m_engine->cameraYaw() - 90.0f;
     }
 
     if (m_moving) {
@@ -147,20 +152,21 @@ void Player::update(float deltaTime, const Map* currentMap) {
 }
 
 void Player::render() {
-    int di = directionIndex(m_direction);
+    // Always pick the sprite that shows the correct side of the character
+    // based on camera angle relative to the character's current facing direction.
+    Direction dir = idleDirection();
+    int di = directionIndex(dir);
     auto& tex = m_textures[di][m_frame];
     glm::vec2 texSize = tex->size();
     float aspect = texSize.x / texSize.y;
     float scaleX = 64.0f;
     float scaleY = scaleX / aspect;
 
-    // Directional billboard: face camera but only rotate around Y axis
+    // Billboard: always face the camera so the sprite is always visible
     glm::vec3 camPos = m_engine->cameraPosition();
-    glm::vec3 dir = glm::normalize(camPos - m_position);
-    float angle = atan2f(dir.x, dir.z);
+    glm::vec3 fwd = glm::normalize(camPos - m_position);
+    float angle = atan2f(fwd.x, fwd.z);
 
-    // Slightly above floor to avoid z-fighting
-    // Negate Y scale to un-flip the sprite (projection has Y-flip for 3D room orientation)
     glm::vec3 pos3D = m_position;
     pos3D.y = 32.0f;
     glm::mat4 model = glm::translate(glm::mat4(1.0f), pos3D);
@@ -169,3 +175,26 @@ void Player::render() {
 
     m_renderer->drawSprite3D(tex->descriptorSet(), model);
 }
+
+Direction Player::idleDirection() const {
+    // Camera angle from the character's position
+    glm::vec3 camPos = m_engine->cameraPosition();
+    glm::vec3 dir = glm::normalize(camPos - m_position);
+    float camAngle = glm::degrees(atan2f(dir.x, dir.z));
+
+    // Relative angle between camera and character's facing direction
+    float diff = camAngle - m_facingAngle;
+    while (diff > 180.0f) diff -= 360.0f;
+    while (diff < -180.0f) diff += 360.0f;
+
+    //   diff ≈ 0°    → camera behind character → Back
+    //   diff ≈ 90°   → camera to character's right → Right
+    //   diff ≈ ±180° → camera in front → Front
+    //   diff ≈ -90°  → camera to character's left → Left
+    if (diff > -45.0f && diff <= 45.0f) return Direction::Back;
+    if (diff > 45.0f && diff <= 135.0f) return Direction::Right;
+    if (diff > -135.0f && diff <= -45.0f) return Direction::Left;
+    return Direction::Front;
+}
+
+
