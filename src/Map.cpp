@@ -12,7 +12,6 @@
 #include <cstdio>
 #include <cstdlib>
 
-#define STB_TRUETYPE_IMPLEMENTATION
 #include "stb_truetype.h"
 
 static Texture* createWoodFloorTexture(Engine* engine) {

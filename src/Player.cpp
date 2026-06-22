@@ -234,13 +234,17 @@ void Player::render() {
     float scaleX = 64.0f;
     float scaleY = scaleX / aspect;
 
+    // Position sprite so visible feet touch the ground (y=0)
+    glm::vec4 vb = tex->visibleBounds();
+    float yOffset = (vb.w / texSize.y) * 64.0f - 32.0f;
+
     // Billboard: always face the camera so the sprite is always visible
     glm::vec3 camPos = m_engine->cameraPosition();
     glm::vec3 fwd = glm::normalize(camPos - m_position);
     float angle = atan2f(fwd.x, fwd.z);
 
     glm::vec3 pos3D = m_position;
-    pos3D.y = 32.0f;
+    pos3D.y = yOffset;
     glm::mat4 model = glm::translate(glm::mat4(1.0f), pos3D);
     model = glm::rotate(model, angle, glm::vec3(0.0f, 1.0f, 0.0f));
     model = glm::scale(model, glm::vec3(scaleX, -scaleY, 1.0f));

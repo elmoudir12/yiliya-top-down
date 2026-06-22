@@ -9,6 +9,7 @@ set(CMAKE_DEPENDS_LANGUAGES
 # The set of dependency files which are needed:
 set(CMAKE_DEPENDS_DEPENDENCY_FILES
   "/home/yiliya/Downloads/TOP DOWN 2D GAME/src/Engine.cpp" "CMakeFiles/yiliya_game.dir/src/Engine.cpp.o" "gcc" "CMakeFiles/yiliya_game.dir/src/Engine.cpp.o.d"
+  "/home/yiliya/Downloads/TOP DOWN 2D GAME/src/Font.cpp" "CMakeFiles/yiliya_game.dir/src/Font.cpp.o" "gcc" "CMakeFiles/yiliya_game.dir/src/Font.cpp.o.d"
   "/home/yiliya/Downloads/TOP DOWN 2D GAME/src/Map.cpp" "CMakeFiles/yiliya_game.dir/src/Map.cpp.o" "gcc" "CMakeFiles/yiliya_game.dir/src/Map.cpp.o.d"
   "/home/yiliya/Downloads/TOP DOWN 2D GAME/src/MapManager.cpp" "CMakeFiles/yiliya_game.dir/src/MapManager.cpp.o" "gcc" "CMakeFiles/yiliya_game.dir/src/MapManager.cpp.o.d"
   "/home/yiliya/Downloads/TOP DOWN 2D GAME/src/Player.cpp" "CMakeFiles/yiliya_game.dir/src/Player.cpp.o" "gcc" "CMakeFiles/yiliya_game.dir/src/Player.cpp.o.d"

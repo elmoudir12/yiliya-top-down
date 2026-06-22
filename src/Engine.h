@@ -140,6 +140,21 @@ private:
 
     Texture* m_playerDotTexture = nullptr;
 
+    // Main menu state
+    bool m_showMenu = true;
+    int m_menuSelection = 0;
+    static constexpr int MENU_OPTION_COUNT = 3;
+    Texture* m_menuTitleTexture = nullptr;
+    Texture* m_menuOptionTextures[MENU_OPTION_COUNT] = { nullptr, nullptr, nullptr };
+    Texture* m_menuCursorTexture = nullptr;
+    Texture* m_menuBorderTexture = nullptr;
+    Texture* m_menuPanelTexture = nullptr;
+    Texture* m_menuSubtitleTexture = nullptr;
+    void loadMenuTextures();
+    void destroyMenuTextures();
+    void handleMenuInput();
+    void renderMenu();
+
     Renderer* m_renderer = nullptr;
     Player* m_player = nullptr;
     MapManager* m_mapManager = nullptr;

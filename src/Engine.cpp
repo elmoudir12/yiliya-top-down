@@ -4,6 +4,7 @@
 #include "Map.h"
 #include "MapManager.h"
 #include "Texture.h"
+#include "Font.h"
 #include <fstream>
 #include <stdexcept>
 #include <cmath>
@@ -116,6 +117,8 @@ void Engine::initVulkan() {
         }
         m_playerDotTexture = new Texture(this, p.data(), S, S);
     }
+
+    loadMenuTextures();
 }
 
 void Engine::renderCollisionDebug(Map* map, Player* player) {
@@ -247,7 +250,10 @@ void Engine::mainLoop() {
         m_lastTime = now;
 
         Map* currentMap = m_mapManager->currentMap();
-        if (!m_showMap) {
+
+        if (m_showMenu) {
+            handleMenuInput();
+        } else if (!m_showMap) {
             if (!m_mapManager->isTransitioning() && currentMap) {
                 m_player->update(deltaTime, currentMap);
             }
@@ -255,9 +261,11 @@ void Engine::mainLoop() {
         }
         currentMap = m_mapManager->currentMap();
 
-        updateCamera();
+        if (!m_showMenu) {
+            updateCamera();
+        }
 
-        if (glfwGetKey(m_window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
+        if (!m_showMenu && glfwGetKey(m_window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
             glfwSetWindowShouldClose(m_window, GLFW_TRUE);
         }
 
@@ -268,10 +276,12 @@ void Engine::mainLoop() {
 
         static bool prevM = false;
         bool currM = glfwGetKey(m_window, GLFW_KEY_M) == GLFW_PRESS;
-        if (currM && !prevM) { m_showMap = !m_showMap; m_mouseDown = false; }
+        if (currM && !prevM && !m_showMenu) { m_showMap = !m_showMap; m_mouseDown = false; }
         prevM = currM;
 
-        if (m_showMap && currentMap) {
+        if (m_showMenu) {
+            m_renderer->setClearColor(0.05f, 0.04f, 0.08f);
+        } else if (m_showMap && currentMap) {
             m_renderer->setClearColor(0.0f, 0.0f, 0.0f);
             // Switch to orthographic projection for 2D overlay
             VkExtent2D ext = m_swapChainExtent;
@@ -286,7 +296,9 @@ void Engine::mainLoop() {
         }
 
         if (m_renderer->beginFrame()) {
-            if (currentMap) {
+            if (m_showMenu) {
+                renderMenu();
+            } else if (currentMap) {
                 if (m_showMap) {
                     renderMapOverlay(currentMap, m_player);
                 } else {
@@ -295,7 +307,7 @@ void Engine::mainLoop() {
                 }
             }
 
-            if (m_showCollisions && currentMap && !m_showMap) {
+            if (m_showCollisions && currentMap && !m_showMap && !m_showMenu) {
                 renderCollisionDebug(currentMap, m_player);
             }
 
@@ -309,6 +321,8 @@ void Engine::mainLoop() {
 }
 
 void Engine::cleanup() {
+    destroyMenuTextures();
+    Font::shutdown();
     delete m_mapManager;
     delete m_player;
     delete m_renderer;
@@ -1224,4 +1238,263 @@ std::vector<char> readFile(const std::string& filename) {
     file.read(buffer.data(), fileSize);
     file.close();
     return buffer;
+}
+
+// ============================================================================
+// Main Menu
+// ============================================================================
+
+void Engine::loadMenuTextures() {
+    if (!Font::load("fonts/alagard.ttf")) return;
+
+    // ---- Title ----
+    {
+        const char* title = "TOP DOWN 2D GAME";
+        int titleSize = 48;
+        int pad = 8;
+        int tw = Font::textWidth(title, titleSize) + pad * 2;
+        int th = Font::textHeight(titleSize) + pad * 2;
+        int baseline = pad + Font::ascent(titleSize);
+        std::vector<uint8_t> pixels(tw * th * 4, 0);
+        // Drop shadow
+        Font::renderText(pixels.data(), tw, th, title, pad + 3, baseline + 3, titleSize, 30, 18, 8);
+        // Main text
+        Font::renderText(pixels.data(), tw, th, title, pad, baseline, titleSize, 240, 220, 180);
+        m_menuTitleTexture = new Texture(this, pixels.data(), tw, th);
+    }
+
+    // ---- Options ----
+    const char* options[MENU_OPTION_COUNT] = { "NEW GAME", "CONTINUE", "QUIT" };
+    int optionSize = 28;
+    int optPad = 4;
+    int optTh = Font::textHeight(optionSize) + optPad * 2;
+    int optBaseline = optPad + Font::ascent(optionSize);
+    for (int i = 0; i < MENU_OPTION_COUNT; ++i) {
+        int tw = Font::textWidth(options[i], optionSize) + optPad * 2;
+        std::vector<uint8_t> pixels(tw * optTh * 4, 0);
+        Font::renderText(pixels.data(), tw, optTh, options[i], optPad, optBaseline, optionSize, 230, 220, 200);
+        m_menuOptionTextures[i] = new Texture(this, pixels.data(), tw, optTh);
+    }
+
+    // ---- Subtitle ----
+    {
+        const char* sub = "PRESS ENTER TO SELECT";
+        int subSize = 20;
+        int subPad = 4;
+        int sw = Font::textWidth(sub, subSize) + subPad * 2;
+        int sh = Font::textHeight(subSize) + subPad * 2;
+        int subBaseline = subPad + Font::ascent(subSize);
+        std::vector<uint8_t> pixels(sw * sh * 4, 0);
+        Font::renderText(pixels.data(), sw, sh, sub, subPad, subBaseline, subSize, 200, 180, 140);
+        m_menuSubtitleTexture = new Texture(this, pixels.data(), sw, sh);
+    }
+
+    // ---- Cursor (yellow triangle pointing right) ----
+    {
+        const int S = 24;
+        std::vector<uint8_t> pixels(S * S * 4, 0);
+        for (int y = 0; y < S; ++y) {
+            int halfY = S / 2;
+            int dy = y - halfY;
+            int span = halfY - std::abs(dy);
+            int x0 = (S / 4) - span / 2;
+            int x1 = x0 + span;
+            for (int x = x0; x < x1; ++x) {
+                if (x >= 0 && x < S) {
+                    pixels[(y * S + x) * 4 + 0] = 255;
+                    pixels[(y * S + x) * 4 + 1] = 220;
+                    pixels[(y * S + x) * 4 + 2] = 80;
+                    pixels[(y * S + x) * 4 + 3] = 255;
+                }
+            }
+        }
+        m_menuCursorTexture = new Texture(this, pixels.data(), S, S);
+    }
+
+    // ---- Menu border (thick brown wood-like border) ----
+    {
+        const int W = 700, H = 460;
+        std::vector<uint8_t> pixels(W * H * 4, 0);
+        for (int y = 0; y < H; ++y) {
+            for (int x = 0; x < W; ++x) {
+                pixels[(y * W + x) * 4 + 0] = 50;
+                pixels[(y * W + x) * 4 + 1] = 35;
+                pixels[(y * W + x) * 4 + 2] = 22;
+                pixels[(y * W + x) * 4 + 3] = 255;
+            }
+        }
+        const int border = 8;
+        for (int y = 0; y < H; ++y) {
+            for (int x = 0; x < W; ++x) {
+                bool onBorder = (x < border || x >= W - border || y < border || y >= H - border);
+                if (onBorder) {
+                    pixels[(y * W + x) * 4 + 0] = 110;
+                    pixels[(y * W + x) * 4 + 1] = 75;
+                    pixels[(y * W + x) * 4 + 2] = 45;
+                }
+            }
+        }
+        for (int y = border; y < H - border; ++y) {
+            for (int x = border; x < W - border; ++x) {
+                if (x == border || x == W - border - 1 || y == border || y == H - border - 1) {
+                    pixels[(y * W + x) * 4 + 0] = 80;
+                    pixels[(y * W + x) * 4 + 1] = 55;
+                    pixels[(y * W + x) * 4 + 2] = 30;
+                }
+            }
+        }
+        m_menuBorderTexture = new Texture(this, pixels.data(), W, H);
+    }
+
+    // ---- Panel fill (interior, no border) ----
+    {
+        const int W = 700, H = 460;
+        const int border = 8;
+        const int innerW = W - 2 * border;
+        const int innerH = H - 2 * border;
+        std::vector<uint8_t> pixels(innerW * innerH * 4, 0);
+        for (int y = 0; y < innerH; ++y) {
+            for (int x = 0; x < innerW; ++x) {
+                pixels[(y * innerW + x) * 4 + 0] = 38;
+                pixels[(y * innerW + x) * 4 + 1] = 26;
+                pixels[(y * innerW + x) * 4 + 2] = 16;
+                pixels[(y * innerW + x) * 4 + 3] = 255;
+            }
+        }
+        m_menuPanelTexture = new Texture(this, pixels.data(), innerW, innerH);
+    }
+}
+
+void Engine::destroyMenuTextures() {
+    if (m_menuTitleTexture) { delete m_menuTitleTexture; m_menuTitleTexture = nullptr; }
+    if (m_menuSubtitleTexture) { delete m_menuSubtitleTexture; m_menuSubtitleTexture = nullptr; }
+    if (m_menuCursorTexture) { delete m_menuCursorTexture; m_menuCursorTexture = nullptr; }
+    if (m_menuBorderTexture) { delete m_menuBorderTexture; m_menuBorderTexture = nullptr; }
+    if (m_menuPanelTexture) { delete m_menuPanelTexture; m_menuPanelTexture = nullptr; }
+    for (int i = 0; i < MENU_OPTION_COUNT; ++i) {
+        if (m_menuOptionTextures[i]) { delete m_menuOptionTextures[i]; m_menuOptionTextures[i] = nullptr; }
+    }
+}
+
+void Engine::handleMenuInput() {
+    static bool prevUp = false, prevDown = false, prevEnter = false, prevSpace = false;
+
+    bool up = glfwGetKey(m_window, GLFW_KEY_UP) == GLFW_PRESS || glfwGetKey(m_window, GLFW_KEY_W) == GLFW_PRESS;
+    bool down = glfwGetKey(m_window, GLFW_KEY_DOWN) == GLFW_PRESS || glfwGetKey(m_window, GLFW_KEY_S) == GLFW_PRESS;
+    bool enter = glfwGetKey(m_window, GLFW_KEY_ENTER) == GLFW_PRESS || glfwGetKey(m_window, GLFW_KEY_KP_ENTER) == GLFW_PRESS;
+    bool space = glfwGetKey(m_window, GLFW_KEY_SPACE) == GLFW_PRESS;
+
+    if (up && !prevUp) {
+        m_menuSelection = (m_menuSelection - 1 + MENU_OPTION_COUNT) % MENU_OPTION_COUNT;
+    }
+    if (down && !prevDown) {
+        m_menuSelection = (m_menuSelection + 1) % MENU_OPTION_COUNT;
+    }
+    if ((enter && !prevEnter) || (space && !prevSpace)) {
+        switch (m_menuSelection) {
+            case 0: // NEW GAME
+                m_showMenu = false;
+                m_mapManager->loadMap("player_house");
+                break;
+            case 1: // CONTINUE (same as new game for now)
+                m_showMenu = false;
+                break;
+            case 2: // QUIT
+                glfwSetWindowShouldClose(m_window, GLFW_TRUE);
+                break;
+        }
+    }
+
+    prevUp = up;
+    prevDown = down;
+    prevEnter = enter;
+    prevSpace = space;
+}
+
+void Engine::renderMenu() {
+    // Orthographic projection for menu
+    VkExtent2D ext = m_swapChainExtent;
+    float asp = (float)ext.width / (float)ext.height;
+    m_projMatrix = glm::ortho(-asp, asp, -1.0f, 1.0f, -1.0f, 1.0f);
+    m_projMatrix[1][1] *= -1.0f;
+    m_viewMatrix = glm::mat4(1.0f);
+
+    // Convert pixel size to sprite size (clip-space units)
+    auto pxSize = [&](float pxW, float pxH) {
+        return glm::vec2(pxW / ext.width * 2.0f * asp, pxH / ext.height * 2.0f);
+    };
+    // Convert pixel center to sprite position (clip-space units)
+    auto pxCenter = [&](float cx, float cy) {
+        return glm::vec2((cx / ext.width) * 2.0f * asp - asp,
+                          1.0f - (cy / ext.height) * 2.0f);
+    };
+
+    // Helper to draw a sprite with pixel top-left and pixel size.
+    // Uses drawSprite3D with a Y-flipped scale so the texture is right-side up.
+    auto drawPx = [&](Texture* tex, float px, float py, float pw, float ph) {
+        if (!tex) return;
+        glm::vec2 center = pxCenter(px + pw * 0.5f, py + ph * 0.5f);
+        glm::vec2 size = pxSize(pw, ph);
+        glm::mat4 model = glm::scale(
+            glm::translate(glm::mat4(1.0f), glm::vec3(center, 0.0f)),
+            glm::vec3(size.x, -size.y, 1.0f));
+        m_renderer->drawSprite3D(tex->descriptorSet(), model);
+    };
+
+    // Window size and position (centered)
+    const int winW = 700, winH = 460;
+    const int winX = (ext.width - winW) / 2;
+    const int winY = (ext.height - winH) / 2;
+
+    // Draw the border (includes interior)
+    drawPx(m_menuBorderTexture, winX, winY, winW, winH);
+
+    // Title at top of window
+    if (m_menuTitleTexture) {
+        glm::vec2 ts = m_menuTitleTexture->size();
+        float scale = (float)winW * 0.75f / ts.x;
+        float drawPxW = ts.x * scale;
+        float drawPxH = ts.y * scale;
+        float tx = winX + (winW - drawPxW) / 2.0f;
+        float ty = winY + 30.0f;
+        drawPx(m_menuTitleTexture, tx, ty, drawPxW, drawPxH);
+    }
+
+    // Options
+    const float optionSpacing = 75.0f;
+    const float optionsStartY = winY + 200.0f;
+    for (int i = 0; i < MENU_OPTION_COUNT; ++i) {
+        if (!m_menuOptionTextures[i]) continue;
+        glm::vec2 os = m_menuOptionTextures[i]->size();
+        bool selected = (i == m_menuSelection);
+        float scale = (float)winW * 0.55f / os.x * (selected ? 1.10f : 1.0f);
+        float drawPxW = os.x * scale;
+        float drawPxH = os.y * scale;
+        float ox = winX + (winW - drawPxW) / 2.0f;
+        float oy = optionsStartY + i * optionSpacing;
+
+        drawPx(m_menuOptionTextures[i], ox, oy, drawPxW, drawPxH);
+
+        // Cursor to the left of selected option
+        if (selected && m_menuCursorTexture) {
+            glm::vec2 cs = m_menuCursorTexture->size();
+            float curScale = drawPxH * 0.55f / cs.y;
+            float curPxW = cs.x * curScale;
+            float curPxH = cs.y * curScale;
+            float curX = ox - curPxW - 16.0f;
+            float curY = oy + (drawPxH - curPxH) / 2.0f;
+            drawPx(m_menuCursorTexture, curX, curY, curPxW, curPxH);
+        }
+    }
+
+    // Subtitle at bottom
+    if (m_menuSubtitleTexture) {
+        glm::vec2 ss = m_menuSubtitleTexture->size();
+        float scale = (float)winW * 0.55f / ss.x;
+        float drawPxW = ss.x * scale;
+        float drawPxH = ss.y * scale;
+        float sx = winX + (winW - drawPxW) / 2.0f;
+        float sy = winY + winH - drawPxH - 30.0f;
+        drawPx(m_menuSubtitleTexture, sx, sy, drawPxW, drawPxH);
+    }
 }

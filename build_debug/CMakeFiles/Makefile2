@@ -81,12 +81,12 @@ clean: CMakeFiles/yiliya_game.dir/clean
 CMakeFiles/yiliya_game.dir/all:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/yiliya_game.dir/build.make CMakeFiles/yiliya_game.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/yiliya_game.dir/build.make CMakeFiles/yiliya_game.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir="/home/yiliya/Downloads/TOP DOWN 2D GAME/build_debug/CMakeFiles" --progress-num=1,2,3,4,5,6,7,8 "Built target yiliya_game"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir="/home/yiliya/Downloads/TOP DOWN 2D GAME/build_debug/CMakeFiles" --progress-num=1,2,3,4,5,6,7,8,9 "Built target yiliya_game"
 .PHONY : CMakeFiles/yiliya_game.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/yiliya_game.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start "/home/yiliya/Downloads/TOP DOWN 2D GAME/build_debug/CMakeFiles" 8
+	$(CMAKE_COMMAND) -E cmake_progress_start "/home/yiliya/Downloads/TOP DOWN 2D GAME/build_debug/CMakeFiles" 9
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/yiliya_game.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start "/home/yiliya/Downloads/TOP DOWN 2D GAME/build_debug/CMakeFiles" 0
 .PHONY : CMakeFiles/yiliya_game.dir/rule

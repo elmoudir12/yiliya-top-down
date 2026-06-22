@@ -1,6 +1,8 @@
 file(REMOVE_RECURSE
   "CMakeFiles/yiliya_game.dir/src/Engine.cpp.o"
   "CMakeFiles/yiliya_game.dir/src/Engine.cpp.o.d"
+  "CMakeFiles/yiliya_game.dir/src/Font.cpp.o"
+  "CMakeFiles/yiliya_game.dir/src/Font.cpp.o.d"
   "CMakeFiles/yiliya_game.dir/src/Map.cpp.o"
   "CMakeFiles/yiliya_game.dir/src/Map.cpp.o.d"
   "CMakeFiles/yiliya_game.dir/src/MapManager.cpp.o"

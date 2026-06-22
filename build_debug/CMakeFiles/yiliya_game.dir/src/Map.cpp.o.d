@@ -376,5 +376,4 @@ CMakeFiles/yiliya_game.dir/src/Map.cpp.o: \
  /usr/include/c++/13/bits/ranges_algo.h \
  /usr/include/c++/13/pstl/glue_algorithm_defs.h \
  /usr/include/c++/13/pstl/execution_defs.h \
- /home/yiliya/Downloads/TOP\ DOWN\ 2D\ GAME/third_party/stb_truetype.h \
- /usr/include/c++/13/math.h /usr/include/c++/13/stdlib.h
+ /home/yiliya/Downloads/TOP\ DOWN\ 2D\ GAME/third_party/stb_truetype.h
