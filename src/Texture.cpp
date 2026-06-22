@@ -151,6 +151,35 @@ void Texture::setAddressMode(VkSamplerAddressMode u, VkSamplerAddressMode v) {
     updateDescriptorSet();
 }
 
+void Texture::setFilter(VkFilter mag, VkFilter min) {
+    VkDevice dev = m_engine->device();
+    if (m_sampler) vkDestroySampler(dev, m_sampler, nullptr);
+    if (m_descriptorSet) {
+        vkFreeDescriptorSets(dev, m_engine->renderer()->descriptorPool(), 1, &m_descriptorSet);
+        m_descriptorSet = VK_NULL_HANDLE;
+    }
+
+    VkSamplerCreateInfo samplerInfo{};
+    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    samplerInfo.magFilter = mag;
+    samplerInfo.minFilter = min;
+    samplerInfo.addressModeU = m_addressModeU;
+    samplerInfo.addressModeV = m_addressModeV;
+    samplerInfo.addressModeW = m_addressModeU;
+    samplerInfo.anisotropyEnable = VK_FALSE;
+    samplerInfo.maxAnisotropy = 1.0f;
+    samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    samplerInfo.unnormalizedCoordinates = VK_FALSE;
+    samplerInfo.compareEnable = VK_FALSE;
+    samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+
+    if (vkCreateSampler(dev, &samplerInfo, nullptr, &m_sampler) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create texture sampler");
+    }
+    updateDescriptorSet();
+}
+
 void Texture::updateDescriptorSet() {
     VkDescriptorSetLayout texLayout = m_engine->renderer()->textureDescriptorLayout();
     VkDescriptorSetAllocateInfo allocInfo{};

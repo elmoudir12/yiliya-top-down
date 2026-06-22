@@ -22,6 +22,7 @@ target_include_directories(yiliya_game PRIVATE
     ${Vulkan_INCLUDE_DIRS}
     ${GLFW_INCLUDE_DIRS}
     ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/third_party
 )
 
 target_link_libraries(yiliya_game

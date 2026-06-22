@@ -47,6 +47,8 @@ public:
     static constexpr float wallHeight() { return WALL_HEIGHT; }
     static constexpr float wallThick() { return WALL_THICK; }
 
+    static constexpr int mapPixPerTile() { return 10; }
+
     Texture* mapOverlayTexture() const { return m_mapOverlayTexture; }
     int globalOriginX() const { return m_globalOriginX; }
     int globalOriginY() const { return m_globalOriginY; }

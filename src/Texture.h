@@ -18,6 +18,7 @@ public:
     glm::vec2 size() const { return m_size; }
     glm::vec4 visibleBounds() const { return m_visibleBounds; }
     void setAddressMode(VkSamplerAddressMode u, VkSamplerAddressMode v);
+    void setFilter(VkFilter mag, VkFilter min);
 
 private:
     Engine* m_engine;

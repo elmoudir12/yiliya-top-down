@@ -8,6 +8,12 @@
 #include <unordered_map>
 #include <algorithm>
 #include <cstdint>
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
+
+#define STB_TRUETYPE_IMPLEMENTATION
+#include "stb_truetype.h"
 
 static Texture* createWoodFloorTexture(Engine* engine) {
     const int S = 32;
@@ -579,8 +585,71 @@ void Map::buildWalls() {
     vkUnmapMemory(m_engine->device(), m_wallMesh.indexBufferMemory);
 }
 
+static std::string fmtRoomName(const std::string& raw) {
+    std::string out;
+    bool cap = true;
+    for (size_t i = 0; i < raw.size(); ++i) {
+        if (raw[i] == '_') { out += ' '; cap = true; }
+        else if (cap) { out += (char)toupper(raw[i]); cap = false; }
+        else { out += raw[i]; }
+    }
+    // "Player S House" → "Player's House"
+    size_t s = out.find(" S ");
+    if (s != std::string::npos) out.replace(s, 3, "'s ");
+    return out;
+}
+
+static void drawText(uint8_t* pixels, int pw, int ph, stbtt_fontinfo* font,
+                     const char* text, int x, int y, float size,
+                     uint8_t r, uint8_t g, uint8_t b) {
+    float scale = stbtt_ScaleForPixelHeight(font, size);
+    int ascent;
+    stbtt_GetFontVMetrics(font, &ascent, nullptr, nullptr);
+    float posX = (float)x;
+    float posY = (float)y + ascent * scale;
+
+    while (*text) {
+        unsigned char ch = (unsigned char)*text;
+        if (ch == ' ') {
+            int adv;
+            stbtt_GetCodepointHMetrics(font, ' ', &adv, nullptr);
+            posX += adv * scale;
+        } else if (ch >= 32) {
+            int adv, lsb;
+            stbtt_GetCodepointHMetrics(font, ch, &adv, &lsb);
+            int cw, chh, xOff, yOff;
+            unsigned char* bm = stbtt_GetCodepointBitmap(font, scale, scale, ch, &cw, &chh, &xOff, &yOff);
+            if (bm) {
+                int bx0 = (int)(posX + lsb * scale + xOff);
+                int by0 = (int)(posY + yOff);
+                for (int by = 0; by < chh; ++by) {
+                    for (int bx = 0; bx < cw; ++bx) {
+                        int px = bx0 + bx, py = by0 + by;
+                        if (px >= 0 && px < pw && py >= 0 && py < ph) {
+                            int a = bm[by * cw + bx];
+                            if (a > 0) {
+                                float f = a / 255.0f;
+                                int i = (py * pw + px) * 4;
+                                pixels[i+0] = (uint8_t)(r * f + pixels[i+0] * (1.0f - f));
+                                pixels[i+1] = (uint8_t)(g * f + pixels[i+1] * (1.0f - f));
+                                pixels[i+2] = (uint8_t)(b * f + pixels[i+2] * (1.0f - f));
+                            }
+                        }
+                    }
+                }
+                free(bm);
+                posX += adv * scale;
+            }
+        } else {
+            ++text;
+            continue;
+        }
+        ++text;
+    }
+}
+
 void Map::generateMapTexture() {
-    const int PIX_PER_TILE = 6;
+    const int PIX_PER_TILE = mapPixPerTile();
     const auto& allMaps = getMapMeta();
 
     // Compute global bounding box of all rooms
@@ -693,7 +762,45 @@ void Map::generateMapTexture() {
     for (int x = cx0; x <= cx1; ++x) { px(x, cy0, 255, 220, 100); px(x, cy1, 255, 220, 100); }
     for (int y = cy0; y <= cy1; ++y) { px(cx0, y, 255, 220, 100); px(cx1, y, 255, 220, 100); }
 
+    // Render room name labels using Alagard font
+    FILE* f = fopen("fonts/alagard.ttf", "rb");
+    if (f) {
+        fseek(f, 0, SEEK_END);
+        long fsz = ftell(f);
+        fseek(f, 0, SEEK_SET);
+        std::vector<unsigned char> fbuf(fsz);
+        if (fread(fbuf.data(), 1, fsz, f) == (size_t)fsz) {
+            stbtt_fontinfo fi;
+            if (stbtt_InitFont(&fi, fbuf.data(), 0)) {
+                float fontSize = 16.0f;
+                int totalAscent, totalDescent;
+                stbtt_GetFontVMetrics(&fi, &totalAscent, &totalDescent, nullptr);
+                for (auto& [name, meta] : allMaps) {
+                    std::string dn = fmtRoomName(name);
+                    int ox = (meta.worldX - minX) * PIX_PER_TILE;
+                    int oy = (meta.worldY - minY) * PIX_PER_TILE;
+                    int roomW = meta.width * PIX_PER_TILE;
+                    int roomH = meta.height * PIX_PER_TILE;
+                    float scale = stbtt_ScaleForPixelHeight(&fi, fontSize);
+                    float tw = 0;
+                    for (size_t i = 0; i < dn.size(); ++i) {
+                        int adv;
+                        stbtt_GetCodepointHMetrics(&fi, (unsigned char)dn[i], &adv, nullptr);
+                        tw += adv * scale;
+                    }
+                    int tx = ox + roomW / 2 - (int)(tw / 2);
+                    int roomCY = oy + roomH / 2;
+                    float textH = (totalAscent - totalDescent) * scale;
+                    int ty = roomCY - (int)(textH * 0.5f);
+                    drawText(pixels.data(), texW, texH, &fi, dn.c_str(), tx, ty, fontSize, 255, 255, 255);
+                }
+            }
+        }
+        fclose(f);
+    }
+
     m_mapOverlayTexture = new Texture(m_engine, pixels.data(), texW, texH);
+    m_mapOverlayTexture->setFilter(VK_FILTER_LINEAR, VK_FILTER_LINEAR);
 }
 
 bool Map::isTileBlocked(int tileX, int tileY) const {

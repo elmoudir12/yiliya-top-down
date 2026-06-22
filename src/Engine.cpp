@@ -186,8 +186,8 @@ void Engine::renderMapOverlay(Map* map, Player* player) {
         // Convert to UV on the global map texture
         float originX = (float)map->globalOriginX();
         float originY = (float)map->globalOriginY();
-        float u = (globalTileX - originX) * 6.0f / (float)gW;   // PIX_PER_TILE is 6
-        float v = (globalTileY - originY) * 6.0f / (float)gH;
+        float u = (globalTileX - originX) * Map::mapPixPerTile() / (float)gW;
+        float v = (globalTileY - originY) * Map::mapPixPerTile() / (float)gH;
         u = std::clamp(u, 0.0f, 1.0f);
         v = std::clamp(v, 0.0f, 1.0f);
 
