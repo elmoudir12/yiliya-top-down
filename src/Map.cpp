@@ -46,6 +46,60 @@ static Texture* createWoodFloorTexture(Engine* engine) {
         VK_SAMPLER_ADDRESS_MODE_REPEAT, VK_SAMPLER_ADDRESS_MODE_REPEAT);
 }
 
+static Texture* createTreeTexture(Engine* engine) {
+    const int S = 64;
+    std::vector<uint8_t> p(S * S * 4, 0);
+    auto px = [&](int x, int y, uint8_t r, uint8_t g, uint8_t b, uint8_t a = 255) {
+        if (x < 0 || x >= S || y < 0 || y >= S) return;
+        int i = (y * S + x) * 4;
+        p[i+0] = r; p[i+1] = g; p[i+2] = b; p[i+3] = a;
+    };
+    // Trunk (brown)
+    for (int xx = 28; xx <= 35; ++xx)
+        for (int yy = 40; yy <= 55; ++yy)
+            px(xx, yy, 90, 55, 25);
+    // Canopy layers (triangular, top-to-bottom)
+    // Layer 1 (top)
+    for (int yy = 4; yy < 20; ++yy) {
+        int halfW = (yy - 4) / 2;
+        for (int xx = 32 - halfW; xx <= 32 + halfW; ++xx)
+            px(xx, yy, 60, 130, 50);
+    }
+    // Layer 2
+    for (int yy = 16; yy < 32; ++yy) {
+        int halfW = 4 + (yy - 16) / 2;
+        for (int xx = 32 - halfW; xx <= 32 + halfW; ++xx)
+            px(xx, yy, 55, 120, 45);
+    }
+    // Layer 2 highlight
+    for (int yy = 16; yy < 28; ++yy) {
+        int halfW = 3 + (yy - 16) / 3;
+        for (int xx = 32 - halfW; xx <= 32 + halfW; ++xx)
+            px(xx, yy, 80, 155, 65);
+    }
+    // Layer 3
+    for (int yy = 28; yy < 44; ++yy) {
+        int halfW = 8 + (yy - 28) / 2;
+        for (int xx = 32 - halfW; xx <= 32 + halfW; ++xx)
+            px(xx, yy, 50, 110, 40);
+    }
+    // Layer 3 highlight
+    for (int yy = 28; yy < 40; ++yy) {
+        int halfW = 6 + (yy - 28) / 3;
+        for (int xx = 32 - halfW; xx <= 32 + halfW; ++xx)
+            px(xx, yy, 70, 145, 60);
+    }
+    // Shadow on right side
+    for (int y = 0; y < 44; ++y)
+        for (int x = 34; x < S; ++x)
+            if (p[(y * S + x) * 4 + 3] > 0) {
+                p[(y * S + x) * 4 + 0] = p[(y * S + x) * 4 + 0] * 2 / 3;
+                p[(y * S + x) * 4 + 1] = p[(y * S + x) * 4 + 1] * 2 / 3;
+                p[(y * S + x) * 4 + 2] = p[(y * S + x) * 4 + 2] * 2 / 3;
+            }
+    return new Texture(engine, p.data(), S, S);
+}
+
 static Texture* createTimberTexture(Engine* engine) {
     const int W = 128, H = 128;
     std::vector<uint8_t> p(W * H * 4, 255);
@@ -126,6 +180,7 @@ struct MapMeta {
     std::vector<uint8_t> blocked;
     int spawnTileX, spawnTileY;
     bool walls = true;
+    std::vector<std::pair<int,int>> trees; // tile coords
 };
 
 static const std::unordered_map<std::string, MapMeta>& getMapMeta() {
@@ -144,13 +199,15 @@ static const std::unordered_map<std::string, MapMeta>& getMapMeta() {
             14, 11,
             {{4, 10, 2, 1, "front_yard", 12, 2}},
             std::vector<uint8_t>(14 * 11, 0),
-            4, 4,
+            4, 4, true, {},
         }},
         {"front_yard", {
             25, 18,
             {{8, 17, 5, 1, "player_house", 5, 8}},
             borderGrid({25, 18}),
             12, 8, false,
+            {{2,2},{2,15},{6,2},{6,15},{10,2},{14,2},{18,2},{22,2},
+             {10,15},{14,15},{18,15},{22,15},{4,8},{8,12},{20,10}},
         }},
     };
     return meta;
@@ -214,6 +271,22 @@ void Map::load(const std::string& mapName) {
     buildFloorBottom();
     if (it->second.walls)
         buildWalls();
+
+    // Build trees
+    m_trees.clear();
+    if (m_treeTexture) { delete m_treeTexture; m_treeTexture = nullptr; }
+    if (!it->second.trees.empty()) {
+        m_treeTexture = createTreeTexture(m_engine);
+        float hw3 = m_width * m_tileSize * 0.5f;
+        float hh3 = m_height * m_tileSize * 0.5f;
+        for (auto& t : it->second.trees) {
+            float wx = t.first * m_tileSize - hw3 + m_tileSize * 0.5f;
+            float wz = t.second * m_tileSize - hh3 + m_tileSize * 0.5f;
+            m_trees.push_back({wx, wz, 1.0f});
+            // Tree collision: 16x16 rect centered on tree
+            m_collisionRects.push_back({wx + hw3 - 8, wz + hh3 - 8, 16, 16});
+        }
+    }
 }
 
 void Map::unload() {
@@ -228,7 +301,12 @@ void Map::unload() {
         delete m_wallTexture;
         m_wallTexture = nullptr;
     }
+    if (m_treeTexture) {
+        delete m_treeTexture;
+        m_treeTexture = nullptr;
+    }
     m_collisionGrid.clear();
+    m_trees.clear();
     m_collisionRects.clear();
     m_wallCollisionRects.clear();
     m_doorGaps.clear();
@@ -488,5 +566,20 @@ void Map::render() {
     if (m_wallMesh.indexCount > 0 && m_wallTexture) {
         m_renderer->drawTilemap(m_wallTexture->descriptorSet(),
             m_wallMesh.vertexBuffer, m_wallMesh.indexBuffer, m_wallMesh.indexCount);
+    }
+    // Billboarded trees
+    if (!m_trees.empty() && m_treeTexture) {
+        glm::vec3 camPos = m_engine->cameraPosition();
+        for (auto& tree : m_trees) {
+            glm::vec3 fwd = glm::normalize(camPos - glm::vec3(tree.x, 0, tree.z));
+            float angle = atan2f(fwd.x, fwd.z);
+            float s = tree.scale * 64.0f;
+            float trunkBotV = 55.0f / 64.0f;
+            float yOff = (trunkBotV - 0.5f) * s;
+            glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(tree.x, yOff, tree.z));
+            model = glm::rotate(model, angle, glm::vec3(0, 1, 0));
+            model = glm::scale(model, glm::vec3(s, -s, 1));
+            m_renderer->drawSprite3D(m_treeTexture->descriptorSet(), model);
+        }
     }
 }

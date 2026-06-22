@@ -76,6 +76,9 @@ private:
 
     Texture* m_wallTexture = nullptr;
     Texture* m_floorTexture = nullptr;
+    Texture* m_treeTexture = nullptr;
+    struct Tree { float x, z; float scale; };
+    std::vector<Tree> m_trees;
 
     static constexpr float WALL_HEIGHT = 64.0f;
     static constexpr float WALL_THICK = 32.0f;
