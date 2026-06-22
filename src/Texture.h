@@ -9,7 +9,9 @@ class Engine;
 class Texture {
 public:
     Texture(Engine* engine, const std::string& filepath);
-    Texture(Engine* engine, const void* pixelData, int width, int height);
+    Texture(Engine* engine, const void* pixelData, int width, int height,
+        VkSamplerAddressMode addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        VkSamplerAddressMode addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE);
     ~Texture();
 
     VkDescriptorSet descriptorSet() const { return m_descriptorSet; }
@@ -26,6 +28,8 @@ private:
     VkDescriptorSet m_descriptorSet = VK_NULL_HANDLE;
     glm::vec2 m_size{};
     glm::vec4 m_visibleBounds{0,0,0,0};
+    VkSamplerAddressMode m_addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    VkSamplerAddressMode m_addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
 
     void createTextureImage(const std::string& filepath);
     void createTextureImageView();

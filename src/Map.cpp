@@ -13,6 +13,80 @@ int Map::s_tilesetRefCount = 0;
 
 static const int TILE_PX = 32;
 
+static Texture* createTimberTexture(Engine* engine) {
+    const int W = 128, H = 128;
+    std::vector<uint8_t> p(W * H * 4, 255);
+
+    auto px = [&](int x, int y, uint8_t r, uint8_t g, uint8_t b) {
+        if (x < 0 || x >= W || y < 0 || y >= H) return;
+        int i = (y * W + x) * 4;
+        p[i+0] = r; p[i+1] = g; p[i+2] = b; p[i+3] = 255;
+    };
+
+    // Colors
+    uint8_t DW[3] = {60, 35, 8};     // dark wood (beams)
+    uint8_t LW[3] = {90, 58, 28};    // light wood (wainscot panels)
+    uint8_t PL[3] = {225, 205, 175}; // plaster
+
+    // Fill plaster
+    for (int y = 0; y < H; ++y)
+        for (int x = 0; x < W; ++x)
+            px(x, y, PL[0], PL[1], PL[2]);
+
+    // Top rail: y = 0..7
+    for (int y = 0; y < 8; ++y)
+        for (int x = 0; x < W; ++x) px(x, y, DW[0], DW[1], DW[2]);
+
+    // Mid rail: y = 56..63
+    for (int y = 56; y < 64; ++y)
+        for (int x = 0; x < W; ++x) px(x, y, DW[0], DW[1], DW[2]);
+
+    // Bottom rail: y = 120..127
+    for (int y = 120; y < 128; ++y)
+        for (int x = 0; x < W; ++x) px(x, y, DW[0], DW[1], DW[2]);
+
+    // Vertical studs (full height)
+    for (int y = 0; y < 64; ++y) {
+        for (int x = 0; x < 6; ++x) px(x, y, DW[0], DW[1], DW[2]);
+        for (int x = 40; x < 46; ++x) px(x, y, DW[0], DW[1], DW[2]);
+        for (int x = 80; x < 86; ++x) px(x, y, DW[0], DW[1], DW[2]);
+        for (int x = 122; x < 128; ++x) px(x, y, DW[0], DW[1], DW[2]);
+    }
+
+    // Diagonal braces in plaster section (y = 8..55)
+    for (int i = 0; i < 42; ++i) {
+        int bx = 8 + i, by = 10 + i;
+        for (int dy = -2; dy <= 2; ++dy)
+            for (int dx = -2; dx <= 2; ++dx)
+                if (by+dy >= 8 && by+dy < 56 && bx+dx >= 6 && bx+dx < 80)
+                    px(bx+dx, by+dy, DW[0], DW[1], DW[2]);
+    }
+    for (int i = 0; i < 42; ++i) {
+        int bx = 84 + i, by = 50 - i;
+        for (int dy = -2; dy <= 2; ++dy)
+            for (int dx = -2; dx <= 2; ++dx)
+                if (by+dy >= 8 && by+dy < 56 && bx+dx >= 80 && bx+dx < 122)
+                    px(bx+dx, by+dy, DW[0], DW[1], DW[2]);
+    }
+
+    // Wainscoting area (y = 64..119) with raised panels
+    for (int y = 64; y < 120; ++y) {
+        for (int x = 0; x < W; ++x) {
+            bool divider = (x % 20) < 4;
+            if (divider) {
+                px(x, y, LW[0], LW[1], LW[2]);
+            } else {
+                int grain = ((x * 5 + y * 7) % 7) - 3;
+                px(x, y, LW[0] + 10 + grain, LW[1] + 8 + grain, LW[2] + 5 + grain);
+            }
+        }
+    }
+
+    return new Texture(engine, p.data(), W, H,
+        VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE);
+}
+
 struct MapMeta {
     std::vector<Map::Transition> transitions;
     int spawnTileX, spawnTileY;
@@ -88,13 +162,11 @@ void Map::load(const std::string& mapName) {
         buildMeshForLayer(m_tileLayers[i], m_layerMeshes[i]);
     }
 
-    buildWalls();
-
-    // 1x1 white texture for walls
     if (!m_wallTexture) {
-        uint32_t white = 0xFFFFFFFF;
-        m_wallTexture = new Texture(m_engine, &white, 1, 1);
+        m_wallTexture = createTimberTexture(m_engine);
     }
+
+    buildWalls();
 }
 
 void Map::unload() {
@@ -211,14 +283,6 @@ void Map::buildMeshForLayer(const std::vector<int>& tiles, LayerMesh& mesh) {
 }
 
 void Map::buildWalls() {
-    glm::vec2 texSize = m_tilesetTexture->size();
-    float texH = texSize.y;
-
-    int wallTile = 307;
-    int srcRow = wallTile / m_tilesetCols;
-    float v0 = (srcRow * TILE_PX) / texH;
-    float v1 = ((srcRow + 1) * TILE_PX) / texH;
-
     float hw = m_width * m_tileSize * 0.5f;
     float hh = m_height * m_tileSize * 0.5f;
     float wh = WALL_HEIGHT;
@@ -227,15 +291,16 @@ void Map::buildWalls() {
     std::vector<QuadVertex> verts;
     std::vector<uint16_t> idxs;
 
-    auto addQuad = [&](const glm::vec3& a, const glm::vec3& b,
-                        const glm::vec3& c, const glm::vec3& d,
-                        float uA, float uB, float uC, float uD,
-                        float vA, float vB, float vC, float vD) {
+    auto addWallQuad = [&](const glm::vec3& a, const glm::vec3& b,
+                            const glm::vec3& c, const glm::vec3& d) {
+        float horiz = glm::distance(a, b);
+        float uEnd = horiz / 64.0f;
         uint32_t base = static_cast<uint32_t>(verts.size());
-        verts.push_back({a, {uA, vA}});
-        verts.push_back({b, {uB, vB}});
-        verts.push_back({c, {uC, vC}});
-        verts.push_back({d, {uD, vD}});
+        // V: 1 at floor (y=0), 0 at ceiling (y=wh) → wainscoting at floor, top rail at ceiling
+        verts.push_back({a, {0.0f, 1.0f}});
+        verts.push_back({b, {uEnd, 1.0f}});
+        verts.push_back({c, {uEnd, 0.0f}});
+        verts.push_back({d, {0.0f, 0.0f}});
         idxs.push_back(base + 0); idxs.push_back(base + 1); idxs.push_back(base + 2);
         idxs.push_back(base + 2); idxs.push_back(base + 3); idxs.push_back(base + 0);
     };
@@ -261,7 +326,6 @@ void Map::buildWalls() {
     m_wallCollisionRects.clear();
     for (auto& b : walls) {
         m_wallCollisionRects.push_back({b.x0 + hw, b.z0 + hh, b.x1 - b.x0, b.z1 - b.z0});
-        // Also add to general collision rects for gameplay collision
         m_collisionRects.push_back(m_wallCollisionRects.back());
     }
 
@@ -269,21 +333,16 @@ void Map::buildWalls() {
         auto& w = walls[i];
         float x0 = w.x0, x1 = w.x1, z0 = w.z0, z1 = w.z1;
 
-        // +X face (if wall extends in +X direction — east face of box)
-        addQuad({x1, 0, z0}, {x1, 0, z1}, {x1, wh, z1}, {x1, wh, z0},
-                0, 1, 1, 0, v0, v0, v1, v1);
+        // +X face
+        addWallQuad({x1, 0, z0}, {x1, 0, z1}, {x1, wh, z1}, {x1, wh, z0});
         // -X face
-        addQuad({x0, 0, z1}, {x0, 0, z0}, {x0, wh, z0}, {x0, wh, z1},
-                0, 1, 1, 0, v0, v0, v1, v1);
+        addWallQuad({x0, 0, z1}, {x0, 0, z0}, {x0, wh, z0}, {x0, wh, z1});
         // +Z face
-        addQuad({x1, 0, z1}, {x0, 0, z1}, {x0, wh, z1}, {x1, wh, z1},
-                0, 1, 1, 0, v0, v0, v1, v1);
+        addWallQuad({x1, 0, z1}, {x0, 0, z1}, {x0, wh, z1}, {x1, wh, z1});
         // -Z face
-        addQuad({x0, 0, z0}, {x1, 0, z0}, {x1, wh, z0}, {x0, wh, z0},
-                0, 1, 1, 0, v0, v0, v1, v1);
-        // top face (+Y)
-        addQuad({x0, wh, z1}, {x1, wh, z1}, {x1, wh, z0}, {x0, wh, z0},
-                0, 1, 1, 0, v0, v0, v1, v1);
+        addWallQuad({x0, 0, z0}, {x1, 0, z0}, {x1, wh, z0}, {x0, wh, z0});
+        // top face
+        addWallQuad({x0, wh, z1}, {x1, wh, z1}, {x1, wh, z0}, {x0, wh, z0});
     }
 
     m_wallMesh.indexCount = static_cast<uint32_t>(idxs.size());
