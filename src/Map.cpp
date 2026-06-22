@@ -208,6 +208,7 @@ static Texture* createTimberTexture(Engine* engine) {
 
 struct MapMeta {
     int width, height;
+    int worldX = 0, worldY = 0;
     std::vector<Map::Transition> transitions;
     std::vector<uint8_t> blocked;
     int spawnTileX, spawnTileY;
@@ -229,13 +230,13 @@ static const std::unordered_map<std::string, MapMeta>& getMapMeta() {
     };
     static const std::unordered_map<std::string, MapMeta> meta = {
         {"player_house", {
-            14, 11,
+            14, 11, 0, 0,
             {{4, 10, 2, 1, "front_yard", 12, 2}},
             std::vector<uint8_t>(14 * 11, 0),
             4, 4, true, false, {},
         }},
         {"front_yard", {
-            25, 18,
+            25, 18, 0, 13,
             {{8, 17, 5, 1, "player_house", 5, 8}},
             borderGrid({25, 18}),
             12, 8, false, true,
@@ -269,6 +270,8 @@ void Map::load(const std::string& mapName) {
     m_spawnTileX = it->second.spawnTileX;
     m_spawnTileY = it->second.spawnTileY;
     m_collisionGrid = it->second.blocked;
+    m_curWorldX = it->second.worldX;
+    m_curWorldY = it->second.worldY;
 
     if (static_cast<int>(m_collisionGrid.size()) != m_width * m_height)
         throw std::runtime_error("Collision grid size mismatch for map: " + mapName);
@@ -307,6 +310,8 @@ void Map::load(const std::string& mapName) {
     if (it->second.walls)
         buildWalls();
 
+    generateMapTexture();
+
     // Build trees
     m_trees.clear();
     if (m_treeTexture) { delete m_treeTexture; m_treeTexture = nullptr; }
@@ -339,6 +344,10 @@ void Map::unload() {
     if (m_treeTexture) {
         delete m_treeTexture;
         m_treeTexture = nullptr;
+    }
+    if (m_mapOverlayTexture) {
+        delete m_mapOverlayTexture;
+        m_mapOverlayTexture = nullptr;
     }
     m_collisionGrid.clear();
     m_trees.clear();
@@ -568,6 +577,123 @@ void Map::buildWalls() {
     vkMapMemory(m_engine->device(), m_wallMesh.indexBufferMemory, 0, isize, 0, &data);
     memcpy(data, idxs.data(), isize);
     vkUnmapMemory(m_engine->device(), m_wallMesh.indexBufferMemory);
+}
+
+void Map::generateMapTexture() {
+    const int PIX_PER_TILE = 6;
+    const auto& allMaps = getMapMeta();
+
+    // Compute global bounding box of all rooms
+    int minX = 0, minY = 0, maxX = 0, maxY = 0;
+    bool first = true;
+    for (auto& [name, meta] : allMaps) {
+        if (first) { minX = meta.worldX; minY = meta.worldY; maxX = meta.worldX + meta.width; maxY = meta.worldY + meta.height; first = false; }
+        else {
+            minX = std::min(minX, meta.worldX);
+            minY = std::min(minY, meta.worldY);
+            maxX = std::max(maxX, meta.worldX + meta.width);
+            maxY = std::max(maxY, meta.worldY + meta.height);
+        }
+    }
+
+    int gW = maxX - minX, gH = maxY - minY;
+    int texW = gW * PIX_PER_TILE, texH = gH * PIX_PER_TILE;
+    m_globalOriginX = minX; m_globalOriginY = minY;
+    m_globalPixW = texW; m_globalPixH = texH;
+
+    std::vector<uint8_t> pixels(texW * texH * 4, 0);
+    auto px = [&](int x, int y, uint8_t r, uint8_t g, uint8_t b, uint8_t a = 255) {
+        if (x < 0 || x >= texW || y < 0 || y >= texH) return;
+        int i = (y * texW + x) * 4;
+        pixels[i+0] = r; pixels[i+1] = g; pixels[i+2] = b; pixels[i+3] = a;
+    };
+
+    // Dark background
+    for (int y = 0; y < texH; ++y)
+        for (int x = 0; x < texW; ++x)
+            px(x, y, 20, 16, 12);
+
+    // Sort rooms by area descending so interior rooms render on top
+    std::vector<std::pair<std::string, MapMeta>> sorted;
+    for (auto& [name, meta] : allMaps) sorted.push_back({name, meta});
+    std::sort(sorted.begin(), sorted.end(), [](auto& a, auto& b) {
+        return a.second.width * a.second.height > b.second.width * b.second.height;
+    });
+
+    // Render each room at its world position
+    for (auto& [name, meta] : sorted) {
+        int ox = (meta.worldX - minX) * PIX_PER_TILE;
+        int oy = (meta.worldY - minY) * PIX_PER_TILE;
+        bool isCurrent = (name == m_mapName);
+        for (int ty = 0; ty < meta.height; ++ty) {
+            for (int tx = 0; tx < meta.width; ++tx) {
+                bool blocked = meta.blocked[ty * meta.width + tx] != 0;
+                uint8_t r, g, b;
+                if (blocked) { r = 55; g = 35; b = 12; }
+                else { r = 170; g = 150; b = 120; }
+                if (isCurrent && !blocked) { r += 30; g += 30; b += 30; }
+                for (int dy = 0; dy < PIX_PER_TILE; ++dy) {
+                    for (int dx = 0; dx < PIX_PER_TILE; ++dx) {
+                        int x = ox + tx * PIX_PER_TILE + dx;
+                        int y = oy + ty * PIX_PER_TILE + dy;
+                        bool edge = (dx == 0 || dy == 0 || dx == PIX_PER_TILE-1 || dy == PIX_PER_TILE-1);
+                        if (edge && !blocked) px(x, y, r*3/4, g*3/4, b*3/4);
+                        else px(x, y, r, g, b);
+                    }
+                }
+            }
+        }
+        // Transition markers (gold diamonds)
+        for (auto& t : meta.transitions) {
+            int cx = ox + (t.tileX + t.tileW / 2) * PIX_PER_TILE + PIX_PER_TILE / 2;
+            int cy = oy + (t.tileY + t.tileH / 2) * PIX_PER_TILE + PIX_PER_TILE / 2;
+            for (int dy = -3; dy <= 3; ++dy) {
+                for (int dx = -3; dx <= 3; ++dx) {
+                    if (abs(dx) + abs(dy) <= 3) {
+                        int xx = cx + dx, yy = cy + dy;
+                        float dist = (abs(dx) + abs(dy)) / 3.0f;
+                        int bright = 200 + (int)(55 * (1.0f - dist));
+                        px(xx, yy, bright, bright * 160 / 200, 30 + (int)(30 * (1.0f - dist)));
+                    }
+                }
+            }
+        }
+    }
+
+    // Dashed connection lines between matching transitions
+    for (auto& [nameA, metaA] : sorted) {
+        for (auto& t : metaA.transitions) {
+            auto itB = allMaps.find(t.targetMap);
+            if (itB == allMaps.end()) continue;
+            auto& metaB = itB->second;
+            for (auto& tb : metaB.transitions) {
+                if (tb.targetMap != nameA) continue;
+                float ax = (metaA.worldX + t.tileX + t.tileW * 0.5f - minX) * PIX_PER_TILE;
+                float ay = (metaA.worldY + t.tileY + t.tileH * 0.5f - minY) * PIX_PER_TILE;
+                float bx = (metaB.worldX + tb.tileX + tb.tileW * 0.5f - minX) * PIX_PER_TILE;
+                float by = (metaB.worldY + tb.tileY + tb.tileH * 0.5f - minY) * PIX_PER_TILE;
+                int steps = std::max(abs((int)(bx - ax)), abs((int)(by - ay)));
+                for (int i = 0; i <= steps; ++i) {
+                    float frac = (float)i / steps;
+                    int lx = (int)(ax + frac * (bx - ax) + 0.5f);
+                    int ly = (int)(ay + frac * (by - ay) + 0.5f);
+                    if ((i / 2) % 2 == 0) px(lx, ly, 180, 160, 70);
+                }
+                break;
+            }
+        }
+    }
+
+    // Yellow highlight border around current room
+    auto& curMeta = allMaps.at(m_mapName);
+    int cx0 = (curMeta.worldX - minX) * PIX_PER_TILE;
+    int cy0 = (curMeta.worldY - minY) * PIX_PER_TILE;
+    int cx1 = (curMeta.worldX + curMeta.width - minX) * PIX_PER_TILE - 1;
+    int cy1 = (curMeta.worldY + curMeta.height - minY) * PIX_PER_TILE - 1;
+    for (int x = cx0; x <= cx1; ++x) { px(x, cy0, 255, 220, 100); px(x, cy1, 255, 220, 100); }
+    for (int y = cy0; y <= cy1; ++y) { px(cx0, y, 255, 220, 100); px(cx1, y, 255, 220, 100); }
+
+    m_mapOverlayTexture = new Texture(m_engine, pixels.data(), texW, texH);
 }
 
 bool Map::isTileBlocked(int tileX, int tileY) const {

@@ -15,6 +15,7 @@ class Renderer;
 class Player;
 class Map;
 class MapManager;
+class Texture;
 
 struct QueueFamilyIndices {
     std::optional<uint32_t> graphicsFamily;
@@ -135,6 +136,9 @@ private:
     float m_mapWorldWidth = 0.0f;
     float m_mapWorldHeight = 0.0f;
     bool m_showCollisions = false;
+    bool m_showMap = false;
+
+    Texture* m_playerDotTexture = nullptr;
 
     Renderer* m_renderer = nullptr;
     Player* m_player = nullptr;
@@ -148,6 +152,7 @@ private:
     void cleanup();
     void updateCamera();
     void renderCollisionDebug(Map* map, Player* player);
+    void renderMapOverlay(Map* map, Player* player);
     void setWindowShouldClose() { m_framebufferResized = true; glfwSetWindowShouldClose(m_window, GLFW_TRUE); }
 
     void createInstance();

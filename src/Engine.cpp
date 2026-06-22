@@ -3,6 +3,7 @@
 #include "Player.h"
 #include "Map.h"
 #include "MapManager.h"
+#include "Texture.h"
 #include <fstream>
 #include <stdexcept>
 #include <cmath>
@@ -94,6 +95,27 @@ void Engine::initVulkan() {
     m_player = new Player(this, m_renderer);
     m_mapManager = new MapManager(this, m_renderer, m_player);
     m_mapManager->loadMap("player_house");
+
+    // Player dot texture for map overlay
+    {
+        const int S = 8;
+        std::vector<uint8_t> p(S * S * 4, 0);
+        int cx = S/2, cy = S/2;
+        for (int y = 0; y < S; ++y) {
+            for (int x = 0; x < S; ++x) {
+                float dx = (float)(x - cx), dy = (float)(y - cy);
+                float dist = sqrtf(dx*dx + dy*dy) / (float)(S/2);
+                if (dist < 1.0f) {
+                    float a = 1.0f - dist * dist;
+                    p[(y*S+x)*4+0] = 240;
+                    p[(y*S+x)*4+1] = 40 + (uint8_t)(40 * (1.0f - dist));
+                    p[(y*S+x)*4+2] = 40 + (uint8_t)(40 * (1.0f - dist));
+                    p[(y*S+x)*4+3] = (uint8_t)(255 * a);
+                }
+            }
+        }
+        m_playerDotTexture = new Texture(this, p.data(), S, S);
+    }
 }
 
 void Engine::renderCollisionDebug(Map* map, Player* player) {
@@ -128,6 +150,57 @@ void Engine::renderCollisionDebug(Map* map, Player* player) {
     m_renderer->drawDebugBox({vb.x, 0.0f, vb.y}, {vb.z, 64.0f, vb.w}, playerCol);
 }
 
+void Engine::renderMapOverlay(Map* map, Player* player) {
+    Texture* mapTex = map->mapOverlayTexture();
+    if (!mapTex) return;
+
+    int gW = map->globalPixW(), gH = map->globalPixH();
+    if (gW == 0 || gH == 0) return;
+    float mapAspect = (float)gW / (float)gH;
+
+    // Map quad size in ortho space (screen is [-asp, asp] × [-1, 1])
+    float fill = 0.75f;
+    float qw, qh;
+    if (mapAspect > 1.0f) {
+        qw = fill * 2.0f;
+        qh = qw / mapAspect;
+    } else {
+        qh = fill * 2.0f;
+        qw = qh * mapAspect;
+    }
+
+    glm::mat4 model = glm::scale(glm::mat4(1.0f), glm::vec3(qw, -qh, 1));
+    m_renderer->drawSprite3D(mapTex->descriptorSet(), model);
+
+    // Player marker — convert 3D world pos to global tile coords, then to ortho UV
+    if (m_playerDotTexture && player) {
+        glm::vec3 pos = player->position();
+        float tileSize = (float)map->tileSize();
+        float hw = map->width() * tileSize * 0.5f;
+        float hh = map->height() * tileSize * 0.5f;
+        float localTileX = (pos.x + hw) / tileSize;
+        float localTileY = (pos.z + hh) / tileSize;
+        float globalTileX = (float)map->curWorldX() + localTileX;
+        float globalTileY = (float)map->curWorldY() + localTileY;
+
+        // Convert to UV on the global map texture
+        float originX = (float)map->globalOriginX();
+        float originY = (float)map->globalOriginY();
+        float u = (globalTileX - originX) * 6.0f / (float)gW;   // PIX_PER_TILE is 6
+        float v = (globalTileY - originY) * 6.0f / (float)gH;
+        u = std::clamp(u, 0.0f, 1.0f);
+        v = std::clamp(v, 0.0f, 1.0f);
+
+        float ox = (u - 0.5f) * qw;
+        float oy = -(v - 0.5f) * qh;
+
+        float dotSize = 0.04f;
+        glm::mat4 mm = glm::translate(glm::mat4(1.0f), glm::vec3(ox, oy, 0));
+        mm = glm::scale(mm, glm::vec3(dotSize, -dotSize, 1));
+        m_renderer->drawSprite3D(m_playerDotTexture->descriptorSet(), mm);
+    }
+}
+
 void Engine::updateCamera() {
     VkExtent2D extent = m_swapChainExtent;
     float aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
@@ -157,11 +230,12 @@ void Engine::mainLoop() {
         m_lastTime = now;
 
         Map* currentMap = m_mapManager->currentMap();
-        if (!m_mapManager->isTransitioning() && currentMap) {
-            m_player->update(deltaTime, currentMap);
+        if (!m_showMap) {
+            if (!m_mapManager->isTransitioning() && currentMap) {
+                m_player->update(deltaTime, currentMap);
+            }
+            m_mapManager->update(deltaTime);
         }
-
-        m_mapManager->update(deltaTime);
         currentMap = m_mapManager->currentMap();
 
         updateCamera();
@@ -175,19 +249,36 @@ void Engine::mainLoop() {
         if (currF1 && !prevF1) m_showCollisions = !m_showCollisions;
         prevF1 = currF1;
 
-        // Set sky color based on map (before render pass begins)
-        if (currentMap && currentMap->mapId() == "front_yard")
+        static bool prevM = false;
+        bool currM = glfwGetKey(m_window, GLFW_KEY_M) == GLFW_PRESS;
+        if (currM && !prevM) { m_showMap = !m_showMap; m_mouseDown = false; }
+        prevM = currM;
+
+        if (m_showMap && currentMap) {
+            m_renderer->setClearColor(0.05f, 0.05f, 0.08f);
+            // Switch to orthographic projection for 2D overlay
+            VkExtent2D ext = m_swapChainExtent;
+            float asp = (float)ext.width / (float)ext.height;
+            m_projMatrix = glm::ortho(-asp, asp, -1.0f, 1.0f, -1.0f, 1.0f);
+            m_projMatrix[1][1] *= -1.0f;
+            m_viewMatrix = glm::mat4(1.0f);
+        } else if (currentMap && currentMap->mapId() == "front_yard") {
             m_renderer->setClearColor(0.5f, 0.7f, 1.0f);
-        else
+        } else {
             m_renderer->setClearColor(0.0f, 0.0f, 0.0f);
+        }
 
         if (m_renderer->beginFrame()) {
             if (currentMap) {
-                m_mapManager->render();
+                if (m_showMap) {
+                    renderMapOverlay(currentMap, m_player);
+                } else {
+                    m_mapManager->render();
+                    m_player->render();
+                }
             }
-            m_player->render();
 
-            if (m_showCollisions && currentMap) {
+            if (m_showCollisions && currentMap && !m_showMap) {
                 renderCollisionDebug(currentMap, m_player);
             }
 
@@ -204,6 +295,7 @@ void Engine::cleanup() {
     delete m_mapManager;
     delete m_player;
     delete m_renderer;
+    delete m_playerDotTexture;
 
     cleanupSwapChain();
 

@@ -47,6 +47,14 @@ public:
     static constexpr float wallHeight() { return WALL_HEIGHT; }
     static constexpr float wallThick() { return WALL_THICK; }
 
+    Texture* mapOverlayTexture() const { return m_mapOverlayTexture; }
+    int globalOriginX() const { return m_globalOriginX; }
+    int globalOriginY() const { return m_globalOriginY; }
+    int globalPixW() const { return m_globalPixW; }
+    int globalPixH() const { return m_globalPixH; }
+    int curWorldX() const { return m_curWorldX; }
+    int curWorldY() const { return m_curWorldY; }
+
 private:
     struct LayerMesh {
         VkBuffer vertexBuffer = VK_NULL_HANDLE;
@@ -87,4 +95,11 @@ private:
     void buildFloorBottom();
     void buildWalls();
     void destroyMesh(LayerMesh& mesh);
+
+private:
+    Texture* m_mapOverlayTexture = nullptr;
+    int m_globalOriginX = 0, m_globalOriginY = 0;
+    int m_globalPixW = 0, m_globalPixH = 0;
+    int m_curWorldX = 0, m_curWorldY = 0;
+    void generateMapTexture();
 };
