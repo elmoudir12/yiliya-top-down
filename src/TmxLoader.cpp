@@ -202,6 +202,13 @@ bool loadTmx(const std::string& filepath, TmxMapData& out) {
 
         std::string groupContent = xml.substr(objPos, objGroupEnd - objPos);
 
+        // Parse optional offset on object group
+        float groupOffX = 0.0f, groupOffY = 0.0f;
+        std::string offXStr = extractTagAttr(groupContent, "<objectgroup", "offsetx");
+        std::string offYStr = extractTagAttr(groupContent, "<objectgroup", "offsety");
+        if (!offXStr.empty()) groupOffX = std::stof(offXStr);
+        if (!offYStr.empty()) groupOffY = std::stof(offYStr);
+
         // Parse each object in this group
         size_t objSearch = 0;
         while (true) {
@@ -229,7 +236,7 @@ bool loadTmx(const std::string& filepath, TmxMapData& out) {
             float w = wStr2.empty() ? 32.0f : std::stof(wStr2);
             float h = hStr2.empty() ? 32.0f : std::stof(hStr2);
 
-            out.collisionRects.push_back({x, y, w, h});
+            out.collisionRects.push_back({x + groupOffX, y + groupOffY, w, h});
 
             objSearch = objEnd + 2;
         }

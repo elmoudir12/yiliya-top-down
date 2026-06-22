@@ -41,13 +41,11 @@ bool Player::canMoveTo(float x, float y, const Map* map) const {
     if (!map) return true;
 
     int tileSize = map->tileSize();
-    float halfW = PLAYER_WIDTH / 2.0f - 2.0f;
-    float halfH = PLAYER_HEIGHT / 2.0f - 2.0f;
-
-    float playerLeft = x - halfW;
-    float playerTop = y - halfH;
-    float playerRight = x + halfW - 1;
-    float playerBottom = y + halfH - 1;
+    // Hitbox only covers the character's legs (bottom portion of the 48×48 sprite)
+    float playerLeft = x - 10.0f;
+    float playerTop = y + 9.0f;
+    float playerRight = x + 10.0f - 1.0f;
+    float playerBottom = y + 23.0f - 1.0f;
 
     // Tile grid collision
     int tx1 = static_cast<int>(playerLeft) / tileSize;

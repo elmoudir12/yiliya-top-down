@@ -21,12 +21,12 @@ struct MapMeta {
 static const std::unordered_map<std::string, MapMeta>& getMapMeta() {
     static const std::unordered_map<std::string, MapMeta> meta = {
         {"player_house", {
-            .transitions = {{5, 14, 2, 1, "town_center", 12, 2}},
-            .spawnTileX = 10,
-            .spawnTileY = 7,
+            .transitions = {{4, 10, 2, 1, "town_center", 12, 2}},
+            .spawnTileX = 4,
+            .spawnTileY = 4,
         }},
         {"town_center", {
-            .transitions = {{8, 17, 5, 1, "player_house", 7, 12}},
+            .transitions = {{8, 17, 5, 1, "player_house", 5, 8}},
             .spawnTileX = 12,
             .spawnTileY = 8,
         }},

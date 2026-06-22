@@ -38,6 +38,11 @@ struct SpritePushConstants {
     glm::mat4 model;
 };
 
+struct DebugPushConstants {
+    glm::mat4 model;
+    glm::vec4 color;
+};
+
 class Renderer {
 public:
     Renderer(Engine* engine);
@@ -46,6 +51,7 @@ public:
     bool beginFrame();
     void drawSprite(VkDescriptorSet descriptorSet, const glm::vec2& position, const glm::vec2& scale, float rotation = 0.0f);
     void drawTilemap(VkDescriptorSet descriptorSet, VkBuffer vertexBuffer, VkBuffer indexBuffer, uint32_t indexCount);
+    void drawDebugRect(const glm::vec2& position, const glm::vec2& scale, const glm::vec4& color);
     void endFrame();
 
     VkDescriptorPool& descriptorPool() { return m_descriptorPool; }
@@ -69,10 +75,15 @@ private:
 
     VkDescriptorSet m_uniformDescriptorSet = VK_NULL_HANDLE;
 
+    // Debug pipeline
+    VkPipelineLayout m_debugPipelineLayout = VK_NULL_HANDLE;
+    VkPipeline m_debugPipeline = VK_NULL_HANDLE;
+
     VkCommandBuffer m_currentCommandBuffer = VK_NULL_HANDLE;
     uint32_t m_imageIndex = 0;
 
     void createVertexBuffer();
+    void createDebugPipeline();
     void createIndexBuffer();
     void createUniformBuffer();
     void createDescriptorPool();

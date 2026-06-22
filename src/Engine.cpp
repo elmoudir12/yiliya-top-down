@@ -114,11 +114,44 @@ void Engine::mainLoop() {
             glfwSetWindowShouldClose(m_window, GLFW_TRUE);
         }
 
+        static bool prevF1 = false;
+        bool currF1 = glfwGetKey(m_window, GLFW_KEY_F1) == GLFW_PRESS;
+        if (currF1 && !prevF1) m_showCollisions = !m_showCollisions;
+        prevF1 = currF1;
+
         if (m_renderer->beginFrame()) {
             if (currentMap) {
                 m_mapManager->render();
             }
             m_player->render();
+
+            if (m_showCollisions && currentMap) {
+                float ts = static_cast<float>(currentMap->tileSize());
+                int w = currentMap->width();
+                int h = currentMap->height();
+                const auto& groundTiles = currentMap->groundTiles();
+                for (int ty = 0; ty < h; ++ty) {
+                    for (int tx = 0; tx < w; ++tx) {
+                        int idx = ty * w + tx;
+                        if (idx < (int)groundTiles.size() && currentMap->isTileBlocked(tx, ty)) {
+                            glm::vec2 pos(tx * ts, ty * ts);
+                            m_renderer->drawDebugRect(pos, glm::vec2(ts), glm::vec4(1.0f, 0.0f, 0.0f, 0.4f));
+                        }
+                    }
+                }
+                for (const auto& rect : currentMap->collisionRects()) {
+                    glm::vec2 pos(rect.x, rect.y);
+                    glm::vec2 scale(rect.w, rect.h);
+                    m_renderer->drawDebugRect(pos, scale, glm::vec4(1.0f, 0.0f, 0.0f, 0.6f));
+                }
+                // Player hitbox
+                glm::vec2 ppos = m_player->position();
+                m_renderer->drawDebugRect(
+                    glm::vec2(ppos.x - 10.0f, ppos.y + 9.0f),
+                    glm::vec2(20.0f, 14.0f),
+                    glm::vec4(0.0f, 1.0f, 0.0f, 0.6f));
+            }
+
             m_renderer->endFrame();
         }
 

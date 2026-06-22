@@ -120,6 +120,7 @@ private:
     glm::vec2 m_cameraPos{ 0.0f, 0.0f };
     float m_mapWorldWidth = 0.0f;
     float m_mapWorldHeight = 0.0f;
+    bool m_showCollisions = false;
 
     Renderer* m_renderer = nullptr;
     Player* m_player = nullptr;
@@ -163,7 +164,9 @@ private:
     static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData);
     void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo);
     bool checkValidationLayerSupport();
+public:
     VkShaderModule createShaderModule(const std::vector<char>& code);
+private:
 };
 
 std::vector<char> readFile(const std::string& filename);
