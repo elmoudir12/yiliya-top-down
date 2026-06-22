@@ -5,6 +5,7 @@
 #include "MapManager.h"
 #include <fstream>
 #include <stdexcept>
+#include <cmath>
 #include <cstring>
 #include <iostream>
 #include <set>
@@ -38,11 +39,37 @@ void Engine::run() {
 void Engine::initWindow() {
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    m_window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Yir Top Down", nullptr, nullptr);
+    m_window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Yir Top Down 3D", nullptr, nullptr);
     glfwSetWindowUserPointer(m_window, this);
     glfwSetFramebufferSizeCallback(m_window, [](GLFWwindow* window, int width, int height) {
         auto* engine = reinterpret_cast<Engine*>(glfwGetWindowUserPointer(window));
         if (engine) engine->m_framebufferResized = true;
+    });
+    glfwSetCursorPosCallback(m_window, [](GLFWwindow* window, double x, double y) {
+        auto* engine = reinterpret_cast<Engine*>(glfwGetWindowUserPointer(window));
+        if (!engine) return;
+        if (engine->m_mouseDown) {
+            double dx = x - engine->m_lastMouseX;
+            double dy = y - engine->m_lastMouseY;
+            engine->m_camYaw += static_cast<float>(dx * 0.3);
+            engine->m_camPitch += static_cast<float>(dy * 0.3);
+            engine->m_camPitch = std::clamp(engine->m_camPitch, -89.0f, 89.0f);
+        }
+        engine->m_lastMouseX = x;
+        engine->m_lastMouseY = y;
+    });
+    glfwSetMouseButtonCallback(m_window, [](GLFWwindow* window, int button, int action, int mods) {
+        auto* engine = reinterpret_cast<Engine*>(glfwGetWindowUserPointer(window));
+        if (!engine) return;
+        if (button == GLFW_MOUSE_BUTTON_LEFT) {
+            engine->m_mouseDown = (action == GLFW_PRESS);
+        }
+    });
+    glfwSetScrollCallback(m_window, [](GLFWwindow* window, double x, double y) {
+        auto* engine = reinterpret_cast<Engine*>(glfwGetWindowUserPointer(window));
+        if (!engine) return;
+        engine->m_camDistance -= static_cast<float>(y * 20.0f);
+        engine->m_camDistance = std::clamp(engine->m_camDistance, 100.0f, 1500.0f);
     });
 }
 
@@ -69,14 +96,24 @@ void Engine::initVulkan() {
     m_mapManager->loadMap("player_house");
 }
 
-float Engine::getViewSize() const {
-    float defaultView = 360.0f;
-    if (m_mapWorldWidth <= 0 || m_mapWorldHeight <= 0) return defaultView;
+void Engine::updateCamera() {
     VkExtent2D extent = m_swapChainExtent;
     float aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
-    float fitH = m_mapWorldHeight / 2.0f;
-    float fitW = m_mapWorldWidth / (2.0f * aspect);
-    return std::min(defaultView, std::max(fitH, fitW));
+
+    // glm::perspective produces OpenGL NDC (Y-up), but Vulkan NDC is Y-down
+    // Flip Y in clip space to correct the orientation
+    glm::mat4 proj = glm::perspective(glm::radians(45.0f), aspect, 1.0f, 3000.0f);
+    proj[1][1] *= -1.0f;
+    m_projMatrix = proj;
+
+    float yawRad = glm::radians(m_camYaw);
+    float pitchRad = glm::radians(m_camPitch);
+    m_camEye = m_camTarget + glm::vec3(
+        m_camDistance * std::cos(pitchRad) * std::sin(yawRad),
+        m_camDistance * std::sin(pitchRad),
+        m_camDistance * std::cos(pitchRad) * std::cos(yawRad)
+    );
+    m_viewMatrix = glm::lookAt(m_camEye, m_camTarget, glm::vec3(0.0f, 1.0f, 0.0f));
 }
 
 void Engine::mainLoop() {
@@ -95,20 +132,7 @@ void Engine::mainLoop() {
         m_mapManager->update(deltaTime);
         currentMap = m_mapManager->currentMap();
 
-        if (currentMap) {
-            float viewSize = getViewSize();
-            VkExtent2D extent = m_swapChainExtent;
-            float aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
-            float viewW = aspect * viewSize * 2.0f;
-            float viewH = viewSize * 2.0f;
-
-            m_cameraPos = m_player->position();
-            m_cameraPos.x = std::clamp(m_cameraPos.x, viewW / 2.0f, m_mapWorldWidth - viewW / 2.0f);
-            m_cameraPos.y = std::clamp(m_cameraPos.y, viewH / 2.0f, m_mapWorldHeight - viewH / 2.0f);
-
-            if (m_mapWorldWidth <= viewW) m_cameraPos.x = m_mapWorldWidth / 2.0f;
-            if (m_mapWorldHeight <= viewH) m_cameraPos.y = m_mapWorldHeight / 2.0f;
-        }
+        updateCamera();
 
         if (glfwGetKey(m_window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
             glfwSetWindowShouldClose(m_window, GLFW_TRUE);
@@ -124,30 +148,6 @@ void Engine::mainLoop() {
                 m_mapManager->render();
             }
             m_player->render();
-
-            if (m_showCollisions && currentMap) {
-                float ts = static_cast<float>(currentMap->tileSize());
-                int w = currentMap->width();
-                int h = currentMap->height();
-                for (int ty = 0; ty < h; ++ty) {
-                    for (int tx = 0; tx < w; ++tx) {
-                        if (currentMap->isTileBlocked(tx, ty)) {
-                            glm::vec2 center(tx * ts + ts / 2.0f, ty * ts + ts / 2.0f);
-                            m_renderer->drawDebugRect(center, glm::vec2(ts), glm::vec4(1.0f, 0.0f, 0.0f, 0.4f));
-                        }
-                    }
-                }
-                for (const auto& rect : currentMap->collisionRects()) {
-                    glm::vec2 center(rect.x + rect.w / 2.0f, rect.y + rect.h / 2.0f);
-                    m_renderer->drawDebugRect(center, glm::vec2(rect.w, rect.h), glm::vec4(1.0f, 0.0f, 0.0f, 0.6f));
-                }
-                // Player hitbox
-                glm::vec2 ppos = m_player->position();
-                m_renderer->drawDebugRect(
-                    glm::vec2(ppos.x, ppos.y + 16.0f),
-                    glm::vec2(20.0f, 14.0f),
-                    glm::vec4(0.0f, 1.0f, 0.0f, 0.6f));
-            }
 
             m_renderer->endFrame();
         }

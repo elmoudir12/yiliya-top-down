@@ -29,6 +29,7 @@ struct SwapChainSupportDetails {
 
 struct UniformBufferObject {
     alignas(16) glm::mat4 projection;
+    alignas(16) glm::mat4 view;
 };
 
 constexpr int MAX_FRAMES_IN_FLIGHT = 2;
@@ -60,9 +61,9 @@ public:
     VkCommandBuffer commandBuffer(uint32_t imageIndex) const { return m_commandBuffers[imageIndex]; }
     VkFramebuffer framebuffer(uint32_t imageIndex) const { return m_swapChainFramebuffers[imageIndex]; }
     Renderer* renderer() const { return m_renderer; }
-    glm::vec2 cameraPos() const { return m_cameraPos; }
-    float getViewSize() const;
-    void setMapBounds(float worldW, float worldH) { m_mapWorldWidth = worldW; m_mapWorldHeight = worldH; }
+    const glm::mat4& viewMatrix() const { return m_viewMatrix; }
+    const glm::mat4& projMatrix() const { return m_projMatrix; }
+    glm::vec3 cameraPosition() const { return m_camEye; }
     void recreateSwapChain();
     void waitIdle() const { vkDeviceWaitIdle(m_device); }
 
@@ -117,7 +118,18 @@ private:
 
     uint32_t m_currentFrame = 0;
     bool m_framebufferResized = false;
-    glm::vec2 m_cameraPos{ 0.0f, 0.0f };
+
+    // 3D camera
+    float m_camYaw = 0.0f;
+    float m_camPitch = 25.0f;
+    float m_camDistance = 500.0f;
+    glm::vec3 m_camTarget{ 0.0f, 0.0f, 0.0f };
+    glm::vec3 m_camEye{ 0.0f, 0.0f, 0.0f };
+    glm::mat4 m_viewMatrix{ 1.0f };
+    glm::mat4 m_projMatrix{ 1.0f };
+    double m_lastMouseX = 0.0, m_lastMouseY = 0.0;
+    bool m_mouseDown = false;
+
     float m_mapWorldWidth = 0.0f;
     float m_mapWorldHeight = 0.0f;
     bool m_showCollisions = false;
@@ -132,6 +144,7 @@ private:
     void initVulkan();
     void mainLoop();
     void cleanup();
+    void updateCamera();
     void setWindowShouldClose() { m_framebufferResized = true; glfwSetWindowShouldClose(m_window, GLFW_TRUE); }
 
     void createInstance();

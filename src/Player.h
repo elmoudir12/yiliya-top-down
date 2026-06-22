@@ -24,8 +24,8 @@ public:
     void update(float deltaTime, const Map* currentMap);
     void render();
 
-    glm::vec2 position() const { return m_position; }
-    void setPosition(const glm::vec2& pos) { m_position = pos; }
+    glm::vec3 position() const { return m_position; }
+    void setPosition(const glm::vec3& pos) { m_position = pos; }
 
     static constexpr float PLAYER_WIDTH = 48.0f;
     static constexpr float PLAYER_HEIGHT = 48.0f;
@@ -34,7 +34,7 @@ private:
     Engine* m_engine;
     Renderer* m_renderer;
 
-    glm::vec2 m_position{ 0.0f, 0.0f };
+    glm::vec3 m_position{ 0.0f, 0.0f, 0.0f };
     Direction m_direction = Direction::Front;
     int m_frame = 0;
     float m_animTimer = 0.0f;
@@ -47,5 +47,5 @@ private:
 
     void loadTextures();
     int directionIndex(Direction dir) const;
-    bool canMoveTo(float x, float y, const Map* map) const;
+    bool canMoveTo(float x, float z, const Map* map) const;
 };

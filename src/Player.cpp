@@ -5,6 +5,7 @@
 #include <GLFW/glfw3.h>
 #include <string>
 #include <algorithm>
+#include <glm/gtc/matrix_transform.hpp>
 
 Player::Player(Engine* engine, Renderer* renderer)
     : m_engine(engine), m_renderer(renderer) {
@@ -37,25 +38,31 @@ static bool aabbOverlap(float ax, float ay, float aw, float ah,
            ay < by + bh && ay + ah > by;
 }
 
-bool Player::canMoveTo(float x, float y, const Map* map) const {
+bool Player::canMoveTo(float x, float z, const Map* map) const {
     if (!map) return true;
 
-    int tileSize = map->tileSize();
-    // Hitbox only covers the character's legs (bottom portion of the 48×48 sprite)
-    float playerLeft = x - 10.0f;
-    float playerTop = y + 9.0f;
-    float playerRight = x + 10.0f - 1.0f;
-    float playerBottom = y + 23.0f - 1.0f;
+    float hw = map->width() * map->tileSize() * 0.5f;
+    float hh = map->height() * map->tileSize() * 0.5f;
+    float tileSize = static_cast<float>(map->tileSize());
+
+    // Convert 3D (x, z) to 2D tile space (top-left origin)
+    float tx = x + hw;
+    float ty = z + hh;
+
+    float playerLeft = tx - 10.0f;
+    float playerTop = ty + 9.0f;
+    float playerRight = tx + 10.0f - 1.0f;
+    float playerBottom = ty + 23.0f - 1.0f;
 
     // Tile grid collision
-    int tx1 = static_cast<int>(playerLeft) / tileSize;
-    int ty1 = static_cast<int>(playerTop) / tileSize;
-    int tx2 = static_cast<int>(playerRight) / tileSize;
-    int ty2 = static_cast<int>(playerBottom) / tileSize;
+    int tx1 = static_cast<int>(playerLeft) / static_cast<int>(tileSize);
+    int ty1 = static_cast<int>(playerTop) / static_cast<int>(tileSize);
+    int tx2 = static_cast<int>(playerRight) / static_cast<int>(tileSize);
+    int ty2 = static_cast<int>(playerBottom) / static_cast<int>(tileSize);
 
-    for (int ty = ty1; ty <= ty2; ++ty) {
-        for (int tx = tx1; tx <= tx2; ++tx) {
-            if (map->isTileBlocked(tx, ty)) return false;
+    for (int tty = ty1; tty <= ty2; ++tty) {
+        for (int ttx = tx1; ttx <= tx2; ++ttx) {
+            if (map->isTileBlocked(ttx, tty)) return false;
         }
     }
 
@@ -82,30 +89,31 @@ void Player::update(float deltaTime, const Map* currentMap) {
 
     float step = MOVE_SPEED * deltaTime;
 
+    // W/S move along Z, A/D move along X (Y-up, Z-forward)
     if (wPressed) {
-        float newY = m_position.y - step;
-        if (canMoveTo(m_position.x, newY, currentMap)) {
-            m_position.y = newY;
+        float newZ = m_position.z - step;
+        if (canMoveTo(m_position.x, newZ, currentMap)) {
+            m_position.z = newZ;
             m_moving = true;
         }
     }
     if (sPressed) {
-        float newY = m_position.y + step;
-        if (canMoveTo(m_position.x, newY, currentMap)) {
-            m_position.y = newY;
+        float newZ = m_position.z + step;
+        if (canMoveTo(m_position.x, newZ, currentMap)) {
+            m_position.z = newZ;
             m_moving = true;
         }
     }
     if (aPressed) {
         float newX = m_position.x - step;
-        if (canMoveTo(newX, m_position.y, currentMap)) {
+        if (canMoveTo(newX, m_position.z, currentMap)) {
             m_position.x = newX;
             m_moving = true;
         }
     }
     if (dPressed) {
         float newX = m_position.x + step;
-        if (canMoveTo(newX, m_position.y, currentMap)) {
+        if (canMoveTo(newX, m_position.z, currentMap)) {
             m_position.x = newX;
             m_moving = true;
         }
@@ -142,5 +150,19 @@ void Player::render() {
     float aspect = texSize.x / texSize.y;
     float scaleX = 64.0f;
     float scaleY = scaleX / aspect;
-    m_renderer->drawSprite(tex->descriptorSet(), m_position, glm::vec2(scaleX, scaleY));
+
+    // Directional billboard: face camera but only rotate around Y axis
+    glm::vec3 camPos = m_engine->cameraPosition();
+    glm::vec3 dir = glm::normalize(camPos - m_position);
+    float angle = atan2f(dir.x, dir.z);
+
+    // Slightly above floor to avoid z-fighting
+    // Negate Y scale to un-flip the sprite (projection has Y-flip for 3D room orientation)
+    glm::vec3 pos3D = m_position;
+    pos3D.y = 0.5f;
+    glm::mat4 model = glm::translate(glm::mat4(1.0f), pos3D);
+    model = glm::rotate(model, angle, glm::vec3(0.0f, 1.0f, 0.0f));
+    model = glm::scale(model, glm::vec3(scaleX, -scaleY, 1.0f));
+
+    m_renderer->drawSprite3D(tex->descriptorSet(), model);
 }

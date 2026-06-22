@@ -9,7 +9,7 @@
 class Engine;
 
 struct QuadVertex {
-    glm::vec2 pos;
+    glm::vec3 pos;
     glm::vec2 texCoord;
 
     static VkVertexInputBindingDescription getBindingDescription() {
@@ -24,7 +24,7 @@ struct QuadVertex {
         std::array<VkVertexInputAttributeDescription, 2> attributes{};
         attributes[0].binding = 0;
         attributes[0].location = 0;
-        attributes[0].format = VK_FORMAT_R32G32_SFLOAT;
+        attributes[0].format = VK_FORMAT_R32G32B32_SFLOAT;
         attributes[0].offset = offsetof(QuadVertex, pos);
         attributes[1].binding = 0;
         attributes[1].location = 1;
@@ -50,6 +50,7 @@ public:
 
     bool beginFrame();
     void drawSprite(VkDescriptorSet descriptorSet, const glm::vec2& position, const glm::vec2& scale, float rotation = 0.0f);
+    void drawSprite3D(VkDescriptorSet descriptorSet, const glm::mat4& model);
     void drawTilemap(VkDescriptorSet descriptorSet, VkBuffer vertexBuffer, VkBuffer indexBuffer, uint32_t indexCount);
     void drawDebugRect(const glm::vec2& position, const glm::vec2& scale, const glm::vec4& color);
     void endFrame();

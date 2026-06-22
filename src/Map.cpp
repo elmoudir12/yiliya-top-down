@@ -87,6 +87,8 @@ void Map::load(const std::string& mapName) {
     for (size_t i = 0; i < m_tileLayers.size(); ++i) {
         buildMeshForLayer(m_tileLayers[i], m_layerMeshes[i]);
     }
+
+    buildWalls();
 }
 
 void Map::unload() {
@@ -94,6 +96,7 @@ void Map::unload() {
         destroyMesh(mesh);
     }
     m_layerMeshes.clear();
+    destroyMesh(m_wallMesh);
     m_groundTiles.clear();
     m_collisionTiles.clear();
     m_tileLayers.clear();
@@ -130,6 +133,9 @@ void Map::buildMeshForLayer(const std::vector<int>& tiles, LayerMesh& mesh) {
     float texW = texSize.x;
     float texH = texSize.y;
 
+    float hw = m_width * m_tileSize * 0.5f;
+    float hh = m_height * m_tileSize * 0.5f;
+
     std::vector<QuadVertex> vertices;
     std::vector<uint16_t> indices;
     vertices.reserve(numTiles * 4);
@@ -148,16 +154,16 @@ void Map::buildMeshForLayer(const std::vector<int>& tiles, LayerMesh& mesh) {
             float u1 = ((srcCol + 1) * TILE_PX) / texW;
             float v1 = ((srcRow + 1) * TILE_PX) / texH;
 
-            float x0 = static_cast<float>(tx * m_tileSize);
-            float y0 = static_cast<float>(ty * m_tileSize);
+            float x0 = static_cast<float>(tx * m_tileSize) - hw;
+            float z0 = static_cast<float>(ty * m_tileSize) - hh;
             float x1 = x0 + m_tileSize;
-            float y1 = y0 + m_tileSize;
+            float z1 = z0 + m_tileSize;
 
             uint32_t base = static_cast<uint32_t>(vertices.size());
-            vertices.push_back({{x0, y0}, {u0, v0}});
-            vertices.push_back({{x1, y0}, {u1, v0}});
-            vertices.push_back({{x1, y1}, {u1, v1}});
-            vertices.push_back({{x0, y1}, {u0, v1}});
+            vertices.push_back({{x0, 0.0f, z0}, {u0, v0}});
+            vertices.push_back({{x1, 0.0f, z0}, {u1, v0}});
+            vertices.push_back({{x1, 0.0f, z1}, {u1, v1}});
+            vertices.push_back({{x0, 0.0f, z1}, {u0, v1}});
             indices.push_back(base + 0);
             indices.push_back(base + 1);
             indices.push_back(base + 2);
@@ -193,6 +199,78 @@ void Map::buildMeshForLayer(const std::vector<int>& tiles, LayerMesh& mesh) {
     vkUnmapMemory(m_engine->device(), mesh.indexBufferMemory);
 }
 
+void Map::buildWalls() {
+    glm::vec2 texSize = m_tilesetTexture->size();
+    float texH = texSize.y;
+
+    int wallTile = 307;
+    int srcRow = wallTile / m_tilesetCols;
+    float v0 = (srcRow * TILE_PX) / texH;
+    float v1 = ((srcRow + 1) * TILE_PX) / texH;
+
+    float hw = m_width * m_tileSize * 0.5f;
+    float hh = m_height * m_tileSize * 0.5f;
+    float wh = WALL_HEIGHT;
+
+    struct WallQuad { float x0, z0, x1, z1; float y0, y1; };
+    WallQuad quads[4] = {
+        // north (z = -hh)
+        {-hw, -hh, hw, -hh, 0.0f, wh},
+        // south (z = hh)
+        {hw, hh, -hw, hh, 0.0f, wh},
+        // west (x = -hw)
+        {-hw, -hh, -hw, hh, 0.0f, wh},
+        // east (x = hw)
+        {hw, hh, hw, -hh, 0.0f, wh},
+    };
+
+    // Calculate total length to tile UV horizontally
+    float perim = 2.0f * (m_width + m_height) * m_tileSize;
+
+    std::vector<QuadVertex> verts;
+    std::vector<uint16_t> idxs;
+
+    for (int i = 0; i < 4; ++i) {
+        auto& q = quads[i];
+        float len = glm::distance(glm::vec2(q.x0, q.z0), glm::vec2(q.x1, q.z1));
+        float cumLen = 0.0f;
+        for (int j = 0; j < i; ++j) {
+            cumLen += glm::distance(glm::vec2(quads[j].x0, quads[j].z0), glm::vec2(quads[j].x1, quads[j].z1));
+        }
+        float uStart = cumLen / perim;
+        float uEnd = (cumLen + len) / perim;
+
+        uint32_t base = static_cast<uint32_t>(verts.size());
+        verts.push_back({{q.x0, q.y0, q.z0}, {uStart, v0}});
+        verts.push_back({{q.x1, q.y0, q.z1}, {uEnd, v0}});
+        verts.push_back({{q.x1, q.y1, q.z1}, {uEnd, v1}});
+        verts.push_back({{q.x0, q.y1, q.z0}, {uStart, v1}});
+        idxs.push_back(base + 0); idxs.push_back(base + 1); idxs.push_back(base + 2);
+        idxs.push_back(base + 2); idxs.push_back(base + 3); idxs.push_back(base + 0);
+    }
+
+    m_wallMesh.indexCount = static_cast<uint32_t>(idxs.size());
+    if (m_wallMesh.indexCount == 0) return;
+
+    VkDeviceSize vsize = sizeof(QuadVertex) * verts.size();
+    VkDeviceSize isize = sizeof(uint16_t) * idxs.size();
+
+    m_engine->createBuffer(vsize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        m_wallMesh.vertexBuffer, m_wallMesh.vertexBufferMemory);
+    void* data;
+    vkMapMemory(m_engine->device(), m_wallMesh.vertexBufferMemory, 0, vsize, 0, &data);
+    memcpy(data, verts.data(), vsize);
+    vkUnmapMemory(m_engine->device(), m_wallMesh.vertexBufferMemory);
+
+    m_engine->createBuffer(isize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        m_wallMesh.indexBuffer, m_wallMesh.indexBufferMemory);
+    vkMapMemory(m_engine->device(), m_wallMesh.indexBufferMemory, 0, isize, 0, &data);
+    memcpy(data, idxs.data(), isize);
+    vkUnmapMemory(m_engine->device(), m_wallMesh.indexBufferMemory);
+}
+
 bool Map::isTileBlocked(int tileX, int tileY) const {
     if (tileX < 0 || tileX >= m_width || tileY < 0 || tileY >= m_height) {
         return true;
@@ -217,5 +295,9 @@ void Map::render() {
             m_renderer->drawTilemap(m_tilesetTexture->descriptorSet(),
                 mesh.vertexBuffer, mesh.indexBuffer, mesh.indexCount);
         }
+    }
+    if (m_wallMesh.indexCount > 0) {
+        m_renderer->drawTilemap(m_tilesetTexture->descriptorSet(),
+            m_wallMesh.vertexBuffer, m_wallMesh.indexBuffer, m_wallMesh.indexCount);
     }
 }

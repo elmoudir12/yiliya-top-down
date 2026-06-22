@@ -5,10 +5,10 @@
 #include <cstring>
 
 static const std::vector<QuadVertex> quadVertices = {
-    {{-0.5f, -0.5f}, {0.0f, 0.0f}},
-    {{ 0.5f, -0.5f}, {1.0f, 0.0f}},
-    {{ 0.5f,  0.5f}, {1.0f, 1.0f}},
-    {{-0.5f,  0.5f}, {0.0f, 1.0f}},
+    {{-0.5f, -0.5f, 0.0f}, {0.0f, 0.0f}},
+    {{ 0.5f, -0.5f, 0.0f}, {1.0f, 0.0f}},
+    {{ 0.5f,  0.5f, 0.0f}, {1.0f, 1.0f}},
+    {{-0.5f,  0.5f, 0.0f}, {0.0f, 1.0f}},
 };
 
 static const std::vector<uint16_t> quadIndices = { 0, 1, 2, 2, 3, 0 };
@@ -152,18 +152,12 @@ bool Renderer::beginFrame() {
     VkFence& fence = m_engine->inFlightFence();
     vkWaitForFences(m_engine->device(), 1, &fence, VK_TRUE, UINT64_MAX);
 
-    VkExtent2D extent = m_engine->swapChainExtent();
-    float aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
-    float viewSize = m_engine->getViewSize();
-    float left = -aspect * viewSize;
-    float right = aspect * viewSize;
-
-    glm::vec2 camPos = m_engine->cameraPos();
     UniformBufferObject ubo{};
-    glm::mat4 proj = glm::ortho(left, right, -viewSize, viewSize, -1.0f, 1.0f);
-    glm::mat4 view = glm::translate(glm::mat4(1.0f), glm::vec3(-camPos, 0.0f));
-    ubo.projection = proj * view;
+    ubo.projection = m_engine->projMatrix();
+    ubo.view = m_engine->viewMatrix();
     memcpy(m_uniformBufferMapped, &ubo, sizeof(ubo));
+
+    VkExtent2D extent = m_engine->swapChainExtent();
 
     m_currentCommandBuffer = m_engine->commandBuffer(m_imageIndex);
     VkCommandBufferBeginInfo beginInfo{};
@@ -215,8 +209,21 @@ bool Renderer::beginFrame() {
 
 void Renderer::drawSprite(VkDescriptorSet descriptorSet, const glm::vec2& position, const glm::vec2& scale, float rotation) {
     glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(position, 0.0f));
+    model = glm::rotate(model, rotation, glm::vec3(0.0f, 0.0f, 1.0f));
     model = glm::scale(model, glm::vec3(scale, 1.0f));
 
+    SpritePushConstants push{};
+    push.model = model;
+    vkCmdPushConstants(m_currentCommandBuffer, m_engine->pipelineLayout(),
+        VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(SpritePushConstants), &push);
+
+    vkCmdBindDescriptorSets(m_currentCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+        m_engine->pipelineLayout(), 1, 1, &descriptorSet, 0, nullptr);
+
+    vkCmdDrawIndexed(m_currentCommandBuffer, static_cast<uint32_t>(quadIndices.size()), 1, 0, 0, 0);
+}
+
+void Renderer::drawSprite3D(VkDescriptorSet descriptorSet, const glm::mat4& model) {
     SpritePushConstants push{};
     push.model = model;
     vkCmdPushConstants(m_currentCommandBuffer, m_engine->pipelineLayout(),

@@ -10,19 +10,23 @@ MapManager::MapManager(Engine* engine, Renderer* renderer, Player* player)
 
 MapManager::~MapManager() = default;
 
+static glm::vec3 tileToWorld(int tileX, int tileY, int tileSize, int mapW, int mapH) {
+    float hw = mapW * tileSize * 0.5f;
+    float hh = mapH * tileSize * 0.5f;
+    float x = tileX * tileSize + tileSize * 0.5f - hw;
+    float z = tileY * tileSize + tileSize * 0.5f - hh;
+    return glm::vec3(x, 0.0f, z);
+}
+
 void MapManager::loadMap(const std::string& mapId) {
     m_engine->waitIdle();
     m_currentMap = std::make_unique<Map>(m_engine, m_renderer);
     m_currentMap->load(mapId);
 
-    float spawnX = m_currentMap->spawnTileX() * m_currentMap->tileSize() + m_currentMap->tileSize() / 2.0f;
-    float spawnY = m_currentMap->spawnTileY() * m_currentMap->tileSize() + m_currentMap->tileSize() / 2.0f;
-    m_player->setPosition(glm::vec2(spawnX, spawnY));
-
-    m_engine->setMapBounds(
-        m_currentMap->worldWidth(),
-        m_currentMap->worldHeight()
-    );
+    glm::vec3 spawnPos = tileToWorld(
+        m_currentMap->spawnTileX(), m_currentMap->spawnTileY(),
+        m_currentMap->tileSize(), m_currentMap->width(), m_currentMap->height());
+    m_player->setPosition(spawnPos);
 }
 
 void MapManager::startTransition(const std::string& mapId, int spawnTileX, int spawnTileY) {
@@ -46,10 +50,10 @@ void MapManager::update(float deltaTime) {
             m_engine->waitIdle();
             m_currentMap = std::make_unique<Map>(m_engine, m_renderer);
             m_currentMap->load(m_targetMap);
-            float spawnX = m_targetSpawnX * m_currentMap->tileSize() + m_currentMap->tileSize() / 2.0f;
-            float spawnY = m_targetSpawnY * m_currentMap->tileSize() + m_currentMap->tileSize() / 2.0f;
-            m_player->setPosition(glm::vec2(spawnX, spawnY));
-            m_engine->setMapBounds(m_currentMap->worldWidth(), m_currentMap->worldHeight());
+            glm::vec3 spawnPos = tileToWorld(
+                m_targetSpawnX, m_targetSpawnY,
+                m_currentMap->tileSize(), m_currentMap->width(), m_currentMap->height());
+            m_player->setPosition(spawnPos);
         }
         if (!m_fadingOut && m_fadeTimer >= m_fadeDuration) {
             m_transitioning = false;
@@ -65,9 +69,11 @@ void MapManager::update(float deltaTime) {
 
     if (!m_currentMap) return;
 
-    glm::vec2 playerPos = m_player->position();
-    int tileX = static_cast<int>(playerPos.x) / m_currentMap->tileSize();
-    int tileY = static_cast<int>(playerPos.y) / m_currentMap->tileSize();
+    glm::vec3 playerPos = m_player->position();
+    float hw = m_currentMap->width() * m_currentMap->tileSize() * 0.5f;
+    float hh = m_currentMap->height() * m_currentMap->tileSize() * 0.5f;
+    int tileX = static_cast<int>((playerPos.x + hw) / m_currentMap->tileSize());
+    int tileY = static_cast<int>((playerPos.z + hh) / m_currentMap->tileSize());
 
     Map::Transition* transition = m_currentMap->checkTransition(tileX, tileY);
     if (transition) {
