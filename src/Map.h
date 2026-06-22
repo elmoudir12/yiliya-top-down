@@ -39,6 +39,7 @@ public:
     float worldHeight() const { return m_height * m_tileSize; }
 
     const std::vector<CollisionRect>& collisionRects() const { return m_collisionRects; }
+    const std::vector<int>& collisionTiles() const { return m_collisionTiles; }
 
 private:
     struct LayerMesh {

@@ -17,6 +17,7 @@ add_executable(yiliya_game
     src/Map.cpp
     src/MapManager.cpp
     src/TmxLoader.cpp
+    src/LightManager.cpp
 )
 
 target_include_directories(yiliya_game PRIVATE
