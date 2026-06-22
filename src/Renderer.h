@@ -53,6 +53,7 @@ public:
     void drawSprite3D(VkDescriptorSet descriptorSet, const glm::mat4& model);
     void drawTilemap(VkDescriptorSet descriptorSet, VkBuffer vertexBuffer, VkBuffer indexBuffer, uint32_t indexCount);
     void drawDebugRect(const glm::vec3& position, const glm::vec2& scale, const glm::vec4& color);
+    void drawDebugBox(const glm::vec3& min, const glm::vec3& max, const glm::vec4& color);
     void endFrame();
 
     VkDescriptorPool& descriptorPool() { return m_descriptorPool; }
@@ -76,15 +77,21 @@ private:
 
     VkDescriptorSet m_uniformDescriptorSet = VK_NULL_HANDLE;
 
-    // Debug pipeline
+    // Debug pipelines
     VkPipelineLayout m_debugPipelineLayout = VK_NULL_HANDLE;
     VkPipeline m_debugPipeline = VK_NULL_HANDLE;
+    VkPipeline m_boxDebugPipeline = VK_NULL_HANDLE;
+
+    VkBuffer m_boxLineBuffer = VK_NULL_HANDLE;
+    VkDeviceMemory m_boxLineBufferMemory = VK_NULL_HANDLE;
 
     VkCommandBuffer m_currentCommandBuffer = VK_NULL_HANDLE;
     uint32_t m_imageIndex = 0;
 
     void createVertexBuffer();
     void createDebugPipeline();
+    void createBoxLineBuffer();
+    void createBoxDebugPipeline();
     void createIndexBuffer();
     void createUniformBuffer();
     void createDescriptorPool();

@@ -99,16 +99,16 @@ void Engine::initVulkan() {
 void Engine::renderCollisionDebug(Map* map) {
     float hw = map->width() * map->tileSize() * 0.5f;
     float hh = map->height() * map->tileSize() * 0.5f;
-    float eps = 0.1f;
     float wh = map->wallHeight();
 
-    // 3D wall collision volumes (green) — floor and ceiling faces
+    // 3D wall collision volumes (green) — full wireframe box
     glm::vec4 wallCol(0.0f, 0.8f, 0.0f, 1.0f);
     for (auto& r : map->wallCollisionRects()) {
-        float cx = r.x - hw + r.w * 0.5f;
-        float cz = r.y - hh + r.h * 0.5f;
-        m_renderer->drawDebugRect({cx, eps, cz}, {r.w, r.h}, wallCol);
-        m_renderer->drawDebugRect({cx, wh, cz}, {r.w, r.h}, wallCol);
+        float wx0 = r.x - hw;
+        float wz0 = r.y - hh;
+        float wx1 = wx0 + r.w;
+        float wz1 = wz0 + r.h;
+        m_renderer->drawDebugBox({wx0, 0.0f, wz0}, {wx1, wh, wz1}, wallCol);
     }
 
     // TMX object-layer collision rects (blue) — floor only
@@ -119,7 +119,7 @@ void Engine::renderCollisionDebug(Map* map) {
         auto& r = allRects[i];
         float cx = r.x - hw + r.w * 0.5f;
         float cz = r.y - hh + r.h * 0.5f;
-        m_renderer->drawDebugRect({cx, eps, cz}, {r.w, r.h}, objCol);
+        m_renderer->drawDebugRect({cx, 0.1f, cz}, {r.w, r.h}, objCol);
     }
 }
 
