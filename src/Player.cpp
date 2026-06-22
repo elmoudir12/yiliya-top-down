@@ -49,10 +49,11 @@ bool Player::canMoveTo(float x, float z, const Map* map) const {
     float tx = x + hw;
     float ty = z + hh;
 
-    float playerLeft = tx - 10.0f;
-    float playerTop = ty + 9.0f;
-    float playerRight = tx + 10.0f - 1.0f;
-    float playerBottom = ty + 23.0f - 1.0f;
+    float half = 24.0f;
+    float playerLeft = tx - half;
+    float playerTop = ty - half;
+    float playerRight = tx + half;
+    float playerBottom = ty + half;
 
     // Tile grid collision
     int tx1 = static_cast<int>(playerLeft) / static_cast<int>(tileSize);

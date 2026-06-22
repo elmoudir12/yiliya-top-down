@@ -96,7 +96,7 @@ void Engine::initVulkan() {
     m_mapManager->loadMap("player_house");
 }
 
-void Engine::renderCollisionDebug(Map* map) {
+void Engine::renderCollisionDebug(Map* map, Player* player) {
     float hw = map->width() * map->tileSize() * 0.5f;
     float hh = map->height() * map->tileSize() * 0.5f;
     float wh = map->wallHeight();
@@ -121,6 +121,13 @@ void Engine::renderCollisionDebug(Map* map) {
         float cz = r.y - hh + r.h * 0.5f;
         m_renderer->drawDebugRect({cx, 0.1f, cz}, {r.w, r.h}, objCol);
     }
+
+    // Player collision volume (yellow) — 48×48×64 box matching sprite texture
+    auto pos = player->position();
+    float half = 24.0f;
+    glm::vec4 playerCol(1.0f, 0.8f, 0.0f, 1.0f);
+    m_renderer->drawDebugBox({pos.x - half, 0.0f, pos.z - half},
+                             {pos.x + half, 64.0f, pos.z + half}, playerCol);
 }
 
 void Engine::updateCamera() {
@@ -177,7 +184,7 @@ void Engine::mainLoop() {
             m_player->render();
 
             if (m_showCollisions && currentMap) {
-                renderCollisionDebug(currentMap);
+                renderCollisionDebug(currentMap, m_player);
             }
 
             m_renderer->endFrame();

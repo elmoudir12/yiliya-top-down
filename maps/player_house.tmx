@@ -51,8 +51,6 @@
   <object id="42" x="231.813" y="199.813" width="16.375" height="18.375"/>
   <object id="43" x="191.938" y="191.875" width="32.0625" height="32.125"/>
   <object id="44" x="32.1818" y="96" width="31.4545" height="95.6364"/>
-  <object id="45" x="131.455" y="96.1818" width="25.2727" height="30.5455"/>
-  <object id="46" x="163.273" y="96.1818" width="25.4545" height="30.9091"/>
   <object id="47" x="383.818" y="96" width="31.8182" height="32"/>
  </objectgroup>
 </map>

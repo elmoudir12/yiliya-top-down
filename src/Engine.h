@@ -147,7 +147,7 @@ private:
     void mainLoop();
     void cleanup();
     void updateCamera();
-    void renderCollisionDebug(Map* map);
+    void renderCollisionDebug(Map* map, Player* player);
     void setWindowShouldClose() { m_framebufferResized = true; glfwSetWindowShouldClose(m_window, GLFW_TRUE); }
 
     void createInstance();
