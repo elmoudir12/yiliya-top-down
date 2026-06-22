@@ -89,32 +89,35 @@ void Player::update(float deltaTime, const Map* currentMap) {
 
     float step = MOVE_SPEED * deltaTime;
 
-    // W/S move along Z, A/D move along X (Y-up, Z-forward)
-    if (wPressed) {
-        float newZ = m_position.z - step;
-        if (canMoveTo(m_position.x, newZ, currentMap)) {
-            m_position.z = newZ;
-            m_moving = true;
+    // Camera-relative movement: W/S forward/back, A/D strafe
+    float yawRad = glm::radians(m_engine->cameraYaw());
+    float fwdX = -std::sin(yawRad);
+    float fwdZ = -std::cos(yawRad);
+    float rgtX = std::cos(yawRad);
+    float rgtZ = -std::sin(yawRad);
+
+    if (wPressed || sPressed || aPressed || dPressed) {
+        float dx = 0.0f, dz = 0.0f;
+        int count = 0;
+        if (wPressed) { dx += fwdX; dz += fwdZ; ++count; }
+        if (sPressed) { dx -= fwdX; dz -= fwdZ; ++count; }
+        if (aPressed) { dx -= rgtX; dz -= rgtZ; ++count; }
+        if (dPressed) { dx += rgtX; dz += rgtZ; ++count; }
+        if (count > 1) {
+            float inv = 1.0f / std::sqrt(2.0f);
+            dx *= inv; dz *= inv;
         }
-    }
-    if (sPressed) {
-        float newZ = m_position.z + step;
-        if (canMoveTo(m_position.x, newZ, currentMap)) {
-            m_position.z = newZ;
-            m_moving = true;
-        }
-    }
-    if (aPressed) {
-        float newX = m_position.x - step;
+        dx *= step; dz *= step;
+
+        // Axis-separated collision for wall sliding
+        float newX = m_position.x + dx;
         if (canMoveTo(newX, m_position.z, currentMap)) {
             m_position.x = newX;
             m_moving = true;
         }
-    }
-    if (dPressed) {
-        float newX = m_position.x + step;
-        if (canMoveTo(newX, m_position.z, currentMap)) {
-            m_position.x = newX;
+        float newZ = m_position.z + dz;
+        if (canMoveTo(m_position.x, newZ, currentMap)) {
+            m_position.z = newZ;
             m_moving = true;
         }
     }

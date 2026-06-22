@@ -64,6 +64,7 @@ public:
     const glm::mat4& viewMatrix() const { return m_viewMatrix; }
     const glm::mat4& projMatrix() const { return m_projMatrix; }
     glm::vec3 cameraPosition() const { return m_camEye; }
+    float cameraYaw() const { return m_camYaw; }
     void recreateSwapChain();
     void waitIdle() const { vkDeviceWaitIdle(m_device); }
 
