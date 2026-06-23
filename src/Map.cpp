@@ -340,6 +340,8 @@ void Map::load(const std::string& mapName) {
         m_decorationScale = 6.0f;
     }
     m_selectedBillboard = -1;
+
+    loadBillboards("billboards.txt");
 }
 
 int Map::billboardCount() const {
@@ -379,6 +381,31 @@ std::string Map::billboardName(int index) const {
     if (treeIdx >= 0 && treeIdx < (int)m_trees.size())
         return "tree " + std::to_string(treeIdx);
     return "?";
+}
+
+void Map::saveBillboards(const std::string& path) const {
+    FILE* f = fopen(path.c_str(), "w");
+    if (!f) return;
+    int n = billboardCount();
+    for (int i = 0; i < n; ++i) {
+        glm::vec3 p = billboardPosition(i);
+        fprintf(f, "%d %f %f %f  # %s\n", i, p.x, p.y, p.z, billboardName(i).c_str());
+    }
+    fclose(f);
+}
+
+void Map::loadBillboards(const std::string& path) {
+    FILE* f = fopen(path.c_str(), "r");
+    if (!f) return;
+    int idx; float x, y, z;
+    while (fscanf(f, "%d %f %f %f", &idx, &x, &y, &z) == 4) {
+        if (idx >= 0 && idx < billboardCount())
+            setBillboardPosition(idx, glm::vec3(x, y, z));
+        // skip rest of line
+        int ch;
+        while ((ch = fgetc(f)) != EOF && ch != '\n');
+    }
+    fclose(f);
 }
 
 void Map::unload() {

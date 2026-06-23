@@ -72,6 +72,8 @@ public:
     std::string billboardName(int index) const;
     int selectedBillboard() const { return m_selectedBillboard; }
     void selectBillboard(int idx) { m_selectedBillboard = idx; }
+    void saveBillboards(const std::string& path) const;
+    void loadBillboards(const std::string& path);
 
 private:
     int m_selectedBillboard = -1;

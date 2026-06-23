@@ -140,6 +140,7 @@ private:
     bool m_showCollisions = false;
     bool m_showMap = false;
     bool m_editMode = false;
+    int m_savedFlashFrames = 0;
 
     Texture* m_playerDotTexture = nullptr;
 

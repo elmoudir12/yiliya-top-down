@@ -401,6 +401,21 @@ void Engine::mainLoop() {
         }
         prevTab = currTab;
 
+        // F5 to save billboard positions
+        static bool prevF5 = false;
+        bool currF5 = glfwGetKey(m_window, GLFW_KEY_F5) == GLFW_PRESS;
+        if (currF5 && !prevF5 && currentMap) {
+            currentMap->saveBillboards("billboards.txt");
+            m_savedFlashFrames = 60;
+        }
+        if (m_savedFlashFrames > 0) {
+            --m_savedFlashFrames;
+            glfwSetWindowTitle(m_window, m_editMode ? "Yir Top Down 3D [EDIT MODE] [SAVED]" : "Yir Top Down 3D [SAVED]");
+        } else {
+            glfwSetWindowTitle(m_window, m_editMode ? "Yir Top Down 3D [EDIT MODE]" : "Yir Top Down 3D");
+        }
+        prevF5 = currF5;
+
         static bool prevM = false;
         bool currM = glfwGetKey(m_window, GLFW_KEY_M) == GLFW_PRESS;
         if (currM && !prevM && !m_showMenu) { m_showMap = !m_showMap; m_mouseDown = false; }
