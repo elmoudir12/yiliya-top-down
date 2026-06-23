@@ -379,7 +379,7 @@ void Map::load(const std::string& mapName) {
             float wx = obj.x - hw3;
             float wz = obj.y - hh3;
             m_trees.push_back({wx, wz, 1.0f});
-            m_collisionRects.push_back({obj.x - 8, obj.y - 8, 16, 16});
+            m_collisionRects.push_back({obj.x - 16, obj.y - 16, 32, 32});
         }
     }
 
@@ -433,7 +433,7 @@ void Map::setBillboardPosition(int index, const glm::vec3& pos) {
             if (ci < (int)m_collisionRects.size()) {
                 float hw = m_width * m_tileSize * 0.5f;
                 float hh = m_height * m_tileSize * 0.5f;
-                m_collisionRects[ci] = {pos.x + hw - 8, pos.z + hh - 8, 16, 16};
+                m_collisionRects[ci] = {pos.x + hw - 16, pos.z + hh - 16, 32, 32};
             }
         }
     }
@@ -448,15 +448,84 @@ std::string Map::billboardName(int index) const {
     return "?";
 }
 
+static std::string xmlAttr(const std::string& xml, size_t pos, const std::string& attr) {
+    std::string search = attr + "=\"";
+    size_t p = xml.find(search, pos);
+    if (p == std::string::npos) return {};
+    p += search.size();
+    size_t end = xml.find('"', p);
+    if (end == std::string::npos) return {};
+    return xml.substr(p, end - p);
+}
+
 void Map::saveBillboards(const std::string& path) const {
-    FILE* f = fopen(path.c_str(), "w");
-    if (!f) return;
     int n = billboardCount();
-    for (int i = 0; i < n; ++i) {
-        glm::vec3 p = billboardPosition(i);
-        fprintf(f, "%d %f %f %f  # %s\n", i, p.x, p.y, p.z, billboardName(i).c_str());
+    // Save decoration position (index 0) to billboards.txt. Trees go to TMX.
+    if (n > 0) {
+        FILE* f = fopen(path.c_str(), "w");
+        if (f) {
+            glm::vec3 p = billboardPosition(0);
+            fprintf(f, "%d %f %f %f  # %s\n", 0, p.x, p.y, p.z, billboardName(0).c_str());
+            fclose(f);
+        }
     }
-    fclose(f);
+
+    // Also save tree positions back to the TMX file
+    std::string tmxPath = "maps/" + m_mapName + ".tmx";
+    std::ifstream tmxFile(tmxPath);
+    if (!tmxFile) return;
+    std::string data((std::istreambuf_iterator<char>(tmxFile)),
+                      std::istreambuf_iterator<char>());
+
+    size_t ogStart = 0;
+    int treeWriteIdx = 0;
+    int decoOffset = (m_decorationTexture ? 1 : 0);
+    while ((ogStart = data.find("<objectgroup", ogStart)) != std::string::npos) {
+        std::string ogName = xmlAttr(data, ogStart, "name");
+        size_t ogEnd = data.find("</objectgroup>", ogStart);
+        if (ogEnd == std::string::npos) break;
+
+        if (ogName == "trees") {
+            size_t objPos = ogStart;
+            while ((objPos = data.find("<object ", objPos)) != std::string::npos && objPos < ogEnd) {
+                size_t tagEnd = data.find("/>", objPos);
+                if (tagEnd == std::string::npos || tagEnd >= ogEnd) break;
+
+                int billIdx = decoOffset + treeWriteIdx;
+                if (billIdx < n) {
+                    glm::vec3 pos = billboardPosition(billIdx);
+                    float hw3 = m_width * m_tileSize * 0.5f;
+                    float hh3 = m_height * m_tileSize * 0.5f;
+                    int pixelX = (int)(pos.x + hw3);
+                    int pixelY = (int)(pos.z + hh3);
+
+                    auto replaceAttr = [&](const std::string& attr, int val) {
+                        size_t aPos = data.find(" " + attr + "=\"", objPos);
+                        if (aPos == std::string::npos || aPos >= tagEnd) return;
+                        size_t vStart = aPos + attr.size() + 3;
+                        size_t vEnd = data.find('"', vStart);
+                        if (vEnd == std::string::npos || vEnd >= tagEnd) return;
+                        std::string newVal = std::to_string(val);
+                        int diff = (int)newVal.size() - (int)(vEnd - vStart);
+                        data.replace(vStart, vEnd - vStart, newVal);
+                        tagEnd = (size_t)((int)tagEnd + diff);
+                        ogEnd = (size_t)((int)ogEnd + diff);
+                    };
+                    replaceAttr("x", pixelX);
+                    replaceAttr("y", pixelY);
+                    ++treeWriteIdx;
+                }
+                objPos = tagEnd + 2;
+            }
+            break;
+        }
+        ogStart = ogEnd + 14;
+    }
+
+    if (treeWriteIdx > 0) {
+        std::ofstream outFile(tmxPath);
+        outFile.write(data.data(), data.size());
+    }
 }
 
 void Map::loadBillboards(const std::string& path) {
@@ -464,9 +533,9 @@ void Map::loadBillboards(const std::string& path) {
     if (!f) return;
     int idx; float x, y, z;
     while (fscanf(f, "%d %f %f %f", &idx, &x, &y, &z) == 4) {
-        if (idx >= 0 && idx < billboardCount())
+        // Only restore decoration (index 0). Trees come from TMX.
+        if (idx == 0 && idx < billboardCount())
             setBillboardPosition(idx, glm::vec3(x, y, z));
-        // skip rest of line
         int ch;
         while ((ch = fgetc(f)) != EOF && ch != '\n');
     }
