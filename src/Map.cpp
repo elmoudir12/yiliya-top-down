@@ -226,13 +226,13 @@ static const std::unordered_map<std::string, MapMeta>& getMapMeta() {
     static const std::unordered_map<std::string, MapMeta> meta = {
         {"player_house", {
             14, 11, 0, 0,
-            {{4, 11, 2, 3, "front_yard", 12, 4}},
+            {{4, 11, 2, 1, "front_yard", 12, 4}},
             std::vector<uint8_t>(14 * 11, 0),
             4, 4, true, false, {},
         }},
         {"front_yard", {
             27, 20, 0, 13,
-            {{10, 0, 5, 1, "player_house", 5, 8}},
+            {{10, -1, 5, 1, "player_house", 5, 8}},
             std::vector<uint8_t>(27 * 20, 0),
             14, 10, false, true,
             {{3,3},{3,16},{7,3},{7,16},{11,3},{15,3},{19,3},{23,3},
@@ -603,10 +603,29 @@ void Map::buildWalls() {
 void Map::buildBoundaryFence() {
     float hw = m_width * m_tileSize * 0.5f;
     float hh = m_height * m_tileSize * 0.5f;
-    // Thin (8-unit) invisible collision rects right at the floor edge
     const float t = 8.0f;
-    m_collisionRects.push_back({0.0f, 0.0f, 2 * hw, t}); // north
-    m_collisionRects.push_back({0.0f, 2 * hh - t, 2 * hw, t}); // south
+    // North fence with door gaps
+    {
+        float cur = 0.0f;
+        for (auto& dg : m_doorGaps) {
+            if (dg.side != 0) continue;
+            float g0 = dg.gapMin + hw, g1 = dg.gapMax + hw;
+            if (cur < g0) m_collisionRects.push_back({cur, 0.0f, g0 - cur, t});
+            cur = g1;
+        }
+        if (cur < 2 * hw) m_collisionRects.push_back({cur, 0.0f, 2 * hw - cur, t});
+    }
+    // South fence with door gaps
+    {
+        float cur = 0.0f;
+        for (auto& dg : m_doorGaps) {
+            if (dg.side != 1) continue;
+            float g0 = dg.gapMin + hw, g1 = dg.gapMax + hw;
+            if (cur < g0) m_collisionRects.push_back({cur, 2 * hh - t, g0 - cur, t});
+            cur = g1;
+        }
+        if (cur < 2 * hw) m_collisionRects.push_back({cur, 2 * hh - t, 2 * hw - cur, t});
+    }
     m_collisionRects.push_back({0.0f, 0.0f, t, 2 * hh}); // west
     m_collisionRects.push_back({2 * hw - t, 0.0f, t, 2 * hh}); // east
 }
