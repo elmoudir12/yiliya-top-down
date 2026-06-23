@@ -192,6 +192,8 @@ bool Renderer::beginFrame() {
     UniformBufferObject ubo{};
     ubo.projection = m_engine->projMatrix();
     ubo.view = m_engine->viewMatrix();
+    ubo.lightPos = m_engine->lightPos();
+    ubo.lightColor = m_engine->lightColor();
     memcpy(m_uniformBufferMapped, &ubo, sizeof(ubo));
 
     VkExtent2D extent = m_engine->swapChainExtent();

@@ -32,6 +32,8 @@ struct SwapChainSupportDetails {
 struct UniformBufferObject {
     alignas(16) glm::mat4 projection;
     alignas(16) glm::mat4 view;
+    alignas(16) glm::vec4 lightPos;   // xyz = world position, w = falloff radius
+    alignas(16) glm::vec4 lightColor; // rgb = color, a = ambient factor (0..1)
 };
 
 constexpr int MAX_FRAMES_IN_FLIGHT = 2;
@@ -67,6 +69,11 @@ public:
     const glm::mat4& projMatrix() const { return m_projMatrix; }
     glm::vec3 cameraPosition() const { return m_camEye; }
     float cameraYaw() const { return m_camYaw; }
+    Texture* shadowTexture() const { return m_shadowTexture; }
+    const glm::vec4& lightPos() const { return m_lightPos; }
+    const glm::vec4& lightColor() const { return m_lightColor; }
+    void setLightPos(const glm::vec4& p) { m_lightPos = p; }
+    void setLightColor(const glm::vec4& c) { m_lightColor = c; }
     void recreateSwapChain();
     void waitIdle() const { vkDeviceWaitIdle(m_device); }
 
@@ -143,6 +150,9 @@ private:
     int m_savedFlashFrames = 0;
 
     Texture* m_playerDotTexture = nullptr;
+    Texture* m_shadowTexture = nullptr;
+    glm::vec4 m_lightPos{0.0f, 200.0f, 0.0f, 600.0f};   // front yard default
+    glm::vec4 m_lightColor{1.0f, 1.0f, 1.0f, 0.35f};    // white, ambient 0.35
 
     // Main menu state
     bool m_showMenu = true;

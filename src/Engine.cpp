@@ -157,6 +157,27 @@ void Engine::initVulkan() {
         m_playerDotTexture = new Texture(this, p.data(), S, S);
     }
 
+    // Shadow blob texture (soft radial gradient for projected shadows)
+    {
+        const int S = 64;
+        std::vector<uint8_t> p(S * S * 4, 0);
+        int cx = S/2, cy = S/2;
+        for (int y = 0; y < S; ++y) {
+            for (int x = 0; x < S; ++x) {
+                float dx = (float)(x - cx) / (float)(S/2);
+                float dy = (float)(y - cy) / (float)(S/2);
+                float dist = sqrtf(dx*dx + dy*dy);
+                float a = 1.0f - dist;
+                a = a < 0.0f ? 0.0f : a * a * 0.4f;
+                p[(y*S+x)*4+0] = 0;
+                p[(y*S+x)*4+1] = 0;
+                p[(y*S+x)*4+2] = 0;
+                p[(y*S+x)*4+3] = (uint8_t)(a * 255.0f);
+            }
+        }
+        m_shadowTexture = new Texture(this, p.data(), S, S);
+    }
+
     loadMenuTextures();
 }
 
@@ -437,6 +458,14 @@ void Engine::mainLoop() {
             m_renderer->setClearColor(0.0f, 0.0f, 0.0f);
         }
 
+        // Set dynamic light based on current map
+        if (currentMap && currentMap->mapId() == "front_yard") {
+            m_lightPos = glm::vec4(0.0f, 200.0f, 0.0f, 600.0f);
+            m_lightColor = glm::vec4(1.0f, 0.95f, 0.9f, 0.35f);
+        } else {
+            m_lightColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f); // full ambient = flat
+        }
+
         if (m_renderer->beginFrame()) {
             if (m_showMenu) {
                 renderMenu();
@@ -482,6 +511,7 @@ void Engine::cleanup() {
     delete m_player;
     delete m_renderer;
     delete m_playerDotTexture;
+    delete m_shadowTexture;
 
     cleanupSwapChain();
 
@@ -744,7 +774,7 @@ void Engine::createDescriptorSetLayout() {
     uboLayoutBinding.descriptorCount = 1;
     uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     uboLayoutBinding.pImmutableSamplers = nullptr;
-    uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;

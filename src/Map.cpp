@@ -1342,6 +1342,17 @@ void Map::render() {
         m_renderer->drawTilemap(m_wallTexture->descriptorSet(),
             m_wallMesh.vertexBuffer, m_wallMesh.indexBuffer, m_wallMesh.indexCount);
     }
+    // Tree shadows (projected onto floor)
+    if (!m_trees.empty() && m_engine->shadowTexture()) {
+        VkDescriptorSet shadowDS = m_engine->shadowTexture()->descriptorSet();
+        for (auto& tree : m_trees) {
+            glm::mat4 sm = glm::translate(glm::mat4(1.0f), glm::vec3(tree.x, 0.05f, tree.z));
+            sm = glm::rotate(sm, -glm::half_pi<float>(), glm::vec3(1.0f, 0.0f, 0.0f));
+            sm = glm::scale(sm, glm::vec3(64.0f, 64.0f, 1.0f));
+            m_renderer->drawSprite3D(shadowDS, sm);
+        }
+    }
+
     // Billboarded trees
     if (!m_trees.empty() && m_treeTexture) {
         glm::vec3 camPos = m_engine->cameraPosition();

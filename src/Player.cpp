@@ -224,6 +224,14 @@ glm::vec4 Player::visibleBounds3D() const {
 }
 
 void Player::render() {
+    // Player shadow blob on the floor
+    if (m_engine->shadowTexture()) {
+        glm::mat4 sm = glm::translate(glm::mat4(1.0f), glm::vec3(m_position.x, 0.05f, m_position.z));
+        sm = glm::rotate(sm, -glm::half_pi<float>(), glm::vec3(1.0f, 0.0f, 0.0f));
+        sm = glm::scale(sm, glm::vec3(40.0f, 40.0f, 1.0f));
+        m_renderer->drawSprite3D(m_engine->shadowTexture()->descriptorSet(), sm);
+    }
+
     // Always pick the sprite that shows the correct side of the character
     // based on camera angle relative to the character's current facing direction.
     Direction dir = idleDirection();
