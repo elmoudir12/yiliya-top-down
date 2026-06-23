@@ -226,13 +226,13 @@ static const std::unordered_map<std::string, MapMeta>& getMapMeta() {
     static const std::unordered_map<std::string, MapMeta> meta = {
         {"player_house", {
             14, 11, 0, 0,
-            {{4, 11, 2, 1, "front_yard", 12, 4}},
+            {{4, 11, 2, 1, "front_yard", 10, 1}},
             std::vector<uint8_t>(14 * 11, 0),
             4, 4, true, false, {},
         }},
         {"front_yard", {
             27, 20, 0, 13,
-            {{10, -1, 1, 1, "player_house", 5, 8}},
+            {{10, -1, 1, 1, "player_house", 5, 9}},
             std::vector<uint8_t>(27 * 20, 0),
             14, 10, false, true,
             {{3,3},{3,16},{7,3},{7,16},{11,3},{15,3},{19,3},{23,3},
