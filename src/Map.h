@@ -43,6 +43,7 @@ public:
 
     const std::vector<CollisionRect>& collisionRects() const { return m_collisionRects; }
     const std::vector<CollisionRect>& wallCollisionRects() const { return m_wallCollisionRects; }
+    const std::vector<Transition>& transitions() const { return m_transitions; }
 
     static constexpr float wallHeight() { return WALL_HEIGHT; }
     static constexpr float wallThick() { return WALL_THICK; }

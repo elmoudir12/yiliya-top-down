@@ -156,6 +156,22 @@ void Engine::renderCollisionDebug(Map* map, Player* player) {
     auto vb = player->visibleBounds3D();
     glm::vec4 playerCol(1.0f, 0.8f, 0.0f, 1.0f);
     m_renderer->drawDebugBox({vb.x, 0.0f, vb.y}, {vb.z, 64.0f, vb.w}, playerCol);
+
+    // Transition/exit zones (red) — floor rect + wireframe box
+    glm::vec4 exitCol(1.0f, 0.2f, 0.2f, 1.0f);
+    float ts = map->tileSize();
+    for (auto& t : map->transitions()) {
+        float wx0 = t.tileX * ts - hw;
+        float wz0 = t.tileY * ts - hh;
+        float wx1 = (t.tileX + t.tileW) * ts - hw;
+        float wz1 = (t.tileY + t.tileH) * ts - hh;
+        float cx = (wx0 + wx1) * 0.5f;
+        float cz = (wz0 + wz1) * 0.5f;
+        float w = wx1 - wx0;
+        float d = wz1 - wz0;
+        m_renderer->drawDebugRect({cx, 0.05f, cz}, {w, d}, exitCol);
+        m_renderer->drawDebugBox({wx0, 0.0f, wz0}, {wx1, 48.0f, wz1}, exitCol);
+    }
 }
 
 void Engine::renderMapOverlay(Map* map, Player* player) {
