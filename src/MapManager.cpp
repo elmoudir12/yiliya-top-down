@@ -29,6 +29,9 @@ void MapManager::loadMap(const std::string& mapId) {
         m_currentMap->spawnTileX(), m_currentMap->spawnTileY(),
         m_currentMap->tileSize(), m_currentMap->width(), m_currentMap->height());
     m_player->setPosition(spawnPos);
+    if (m_engine->npc()) {
+        m_engine->npc()->setPosition(spawnPos + glm::vec3(0.0f, 0.0f, -64.0f));
+    }
 }
 
 void MapManager::startTransition(const std::string& mapId, int spawnTileX, int spawnTileY) {
@@ -57,8 +60,21 @@ void MapManager::update(float deltaTime) {
                 m_currentMap->tileSize(), m_currentMap->width(), m_currentMap->height());
             m_player->setPosition(spawnPos);
             if (m_engine->npc()) {
-                glm::vec3 npcSpawn = spawnPos + glm::vec3(-32.0f, 0.0f, 32.0f);
-                m_engine->npc()->setPosition(npcSpawn);
+                // Offset NPC away from the map edge the player entered from
+                int w = m_currentMap->width();
+                int h = m_currentMap->height();
+                glm::vec3 npcOff(0.0f, 0.0f, 0.0f);
+                if (m_targetSpawnY <= 1)
+                    npcOff.z =  64.0f; // entered from north, place south
+                else if (m_targetSpawnY >= h - 2)
+                    npcOff.z = -64.0f; // entered from south, place north
+                else if (m_targetSpawnX <= 1)
+                    npcOff.x =  64.0f; // entered from west, place east
+                else if (m_targetSpawnX >= w - 2)
+                    npcOff.x = -64.0f; // entered from east, place west
+                else
+                    npcOff.z = -64.0f; // fallback: place north
+                m_engine->npc()->setPosition(spawnPos + npcOff);
             }
         }
         if (!m_fadingOut && m_fadeTimer >= m_fadeDuration) {
