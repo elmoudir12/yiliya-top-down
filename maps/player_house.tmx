@@ -35,7 +35,7 @@
 </data>
  </layer>
  <objectgroup id="3" name="transitions">
-  <object id="1" name="to_front_yard" x="128" y="352" width="64" height="32">
+   <object id="1" name="to_front_yard" x="128" y="352" width="64" height="32">
    <properties>
     <property name="spawnX" value="10"/>
     <property name="spawnY" value="1"/>
