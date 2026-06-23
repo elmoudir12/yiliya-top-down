@@ -313,10 +313,12 @@ void Map::load(const std::string& mapName) {
     // Build trees
     m_trees.clear();
     if (m_treeTexture) { delete m_treeTexture; m_treeTexture = nullptr; }
+    m_treeCollisionStart = -1;
     if (!it->second.trees.empty()) {
         m_treeTexture = createTreeTexture(m_engine);
         float hw3 = m_width * m_tileSize * 0.5f;
         float hh3 = m_height * m_tileSize * 0.5f;
+        m_treeCollisionStart = (int)m_collisionRects.size();
         for (auto& t : it->second.trees) {
             float wx = t.first * m_tileSize - hw3 + m_tileSize * 0.5f;
             float wz = t.second * m_tileSize - hh3 + m_tileSize * 0.5f;
@@ -342,6 +344,8 @@ void Map::load(const std::string& mapName) {
     m_selectedBillboard = -1;
 
     loadBillboards("billboards.txt");
+    if (mapName == "front_yard")
+        buildDirtPath();
 }
 
 int Map::billboardCount() const {
@@ -371,6 +375,14 @@ void Map::setBillboardPosition(int index, const glm::vec3& pos) {
     if (treeIdx >= 0 && treeIdx < (int)m_trees.size()) {
         m_trees[treeIdx].x = pos.x;
         m_trees[treeIdx].z = pos.z;
+        if (m_treeCollisionStart >= 0) {
+            int ci = m_treeCollisionStart + treeIdx;
+            if (ci < (int)m_collisionRects.size()) {
+                float hw = m_width * m_tileSize * 0.5f;
+                float hh = m_height * m_tileSize * 0.5f;
+                m_collisionRects[ci] = {pos.x + hw - 8, pos.z + hh - 8, 16, 16};
+            }
+        }
     }
 }
 
@@ -419,6 +431,11 @@ void Map::unload() {
     if (m_wallTexture) {
         delete m_wallTexture;
         m_wallTexture = nullptr;
+    }
+    destroyMesh(m_dirtPathMesh);
+    if (m_dirtTexture) {
+        delete m_dirtTexture;
+        m_dirtTexture = nullptr;
     }
     if (m_treeTexture) {
         delete m_treeTexture;
@@ -954,6 +971,91 @@ Map::Transition* Map::checkTransition(int tileX, int tileY) {
     return nullptr;
 }
 
+static Texture* createDirtTexture(Engine* engine) {
+    const int S = 32;
+    std::vector<uint8_t> p(S * S * 4, 255);
+    auto clamp8 = [](int v) { return (uint8_t)(v < 0 ? 0 : v > 255 ? 255 : v); };
+    auto hash = [](int x, int y) -> unsigned {
+        unsigned h = (unsigned)(x * 374761393 + y * 668265263);
+        h = (h ^ (h >> 13)) * 1274126177u;
+        return (h ^ (h >> 16)) & 0xFF;
+    };
+    for (int y = 0; y < S; ++y) {
+        for (int x = 0; x < S; ++x) {
+            unsigned h = hash(x, y);
+            unsigned h2 = hash(x ^ 31, y ^ 17);
+            int r = 90 + (h % 30);
+            int g = 65 + (h % 20);
+            int b = 35 + (h % 15);
+            // Small pebbles/stones
+            if ((h2 % 8) == 0) { r += 25; g += 20; b += 15; }
+            // Darker patches (moisture/organic)
+            if ((hash(x+7, y+11) % 12) == 0) { r -= 15; g -= 10; b -= 5; }
+            p[(y * S + x) * 4 + 0] = clamp8(r);
+            p[(y * S + x) * 4 + 1] = clamp8(g);
+            p[(y * S + x) * 4 + 2] = clamp8(b);
+            p[(y * S + x) * 4 + 3] = 255;
+        }
+    }
+    return new Texture(engine, p.data(), S, S,
+        VK_SAMPLER_ADDRESS_MODE_REPEAT, VK_SAMPLER_ADDRESS_MODE_REPEAT);
+}
+
+void Map::buildDirtPath() {
+    if (!m_dirtTexture)
+        m_dirtTexture = createDirtTexture(m_engine);
+
+    float ts = (float)m_tileSize;
+    float hw = m_width * ts * 0.5f;
+    float hh = m_height * ts * 0.5f;
+
+    // Path center tiles (x, z) in tile coords, winding through front_yard
+    struct Pt { float x, z; };
+    std::vector<Pt> centers = {
+        {10.0f, 1.5f}, {10.5f, 3.0f}, {10.0f, 4.5f},
+        {10.5f, 6.0f}, {10.0f, 7.5f}, {9.5f, 9.0f},
+        {10.0f, 10.5f}, {10.5f, 12.0f}, {10.0f, 13.5f},
+        {10.0f, 15.0f}, {10.0f, 16.5f}, {10.0f, 18.0f},
+    };
+
+    std::vector<QuadVertex> verts;
+    std::vector<uint16_t> idxs;
+
+    for (auto& c : centers) {
+        float cx = c.x * ts - hw;
+        float cz = c.z * ts - hh;
+        float halfW = ts * 1.25f;
+        float halfH = ts * 0.6f;
+        float x0 = cx - halfW, x1 = cx + halfW;
+        float z0 = cz - halfH, z1 = cz + halfH;
+
+        uint32_t base = (uint32_t)verts.size();
+        verts.push_back({{x0, 0.01f, z0}, {0.0f, 0.0f}});
+        verts.push_back({{x1, 0.01f, z0}, {1.0f, 0.0f}});
+        verts.push_back({{x1, 0.01f, z1}, {1.0f, 1.0f}});
+        verts.push_back({{x0, 0.01f, z1}, {0.0f, 1.0f}});
+        idxs.push_back(base+0); idxs.push_back(base+1); idxs.push_back(base+2);
+        idxs.push_back(base+2); idxs.push_back(base+3); idxs.push_back(base+0);
+    }
+
+    m_dirtPathMesh.indexCount = (uint32_t)idxs.size();
+    VkDeviceSize vsize = sizeof(QuadVertex) * verts.size();
+    VkDeviceSize isize = sizeof(uint16_t) * idxs.size();
+    m_engine->createBuffer(vsize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        m_dirtPathMesh.vertexBuffer, m_dirtPathMesh.vertexBufferMemory);
+    void* data;
+    vkMapMemory(m_engine->device(), m_dirtPathMesh.vertexBufferMemory, 0, vsize, 0, &data);
+    memcpy(data, verts.data(), vsize);
+    vkUnmapMemory(m_engine->device(), m_dirtPathMesh.vertexBufferMemory);
+    m_engine->createBuffer(isize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        m_dirtPathMesh.indexBuffer, m_dirtPathMesh.indexBufferMemory);
+    vkMapMemory(m_engine->device(), m_dirtPathMesh.indexBufferMemory, 0, isize, 0, &data);
+    memcpy(data, idxs.data(), isize);
+    vkUnmapMemory(m_engine->device(), m_dirtPathMesh.indexBufferMemory);
+}
+
 void Map::render() {
     if (m_floorTopMesh.indexCount > 0 && m_floorTexture) {
         m_renderer->drawTilemap(m_floorTexture->descriptorSet(),
@@ -964,6 +1066,11 @@ void Map::render() {
         m_renderer->drawTilemap(m_floorTexture->descriptorSet(),
             m_floorBottomMesh.vertexBuffer, m_floorBottomMesh.indexBuffer,
             m_floorBottomMesh.indexCount);
+    }
+    if (m_dirtPathMesh.indexCount > 0 && m_dirtTexture) {
+        m_renderer->drawTilemap(m_dirtTexture->descriptorSet(),
+            m_dirtPathMesh.vertexBuffer, m_dirtPathMesh.indexBuffer,
+            m_dirtPathMesh.indexCount);
     }
     if (m_wallMesh.indexCount > 0 && m_wallTexture) {
         m_renderer->drawTilemap(m_wallTexture->descriptorSet(),

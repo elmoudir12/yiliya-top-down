@@ -105,12 +105,15 @@ private:
 
     Texture* m_wallTexture = nullptr;
     Texture* m_floorTexture = nullptr;
+    Texture* m_dirtTexture = nullptr;
+    LayerMesh m_dirtPathMesh;
     Texture* m_treeTexture = nullptr;
     Texture* m_decorationTexture = nullptr;
     glm::vec3 m_decorationPos{ 0.0f, 0.0f, 0.0f };
     float m_decorationScale = 1.0f;
     struct Tree { float x, z; float scale; };
     std::vector<Tree> m_trees;
+    int m_treeCollisionStart = -1;
 
     static constexpr float WALL_HEIGHT = 64.0f;
     static constexpr float WALL_THICK = 32.0f;
@@ -119,6 +122,7 @@ private:
     void buildFloorBottom();
     void buildWalls();
     void buildBoundaryFence();
+    void buildDirtPath();
     void destroyMesh(LayerMesh& mesh);
 
 private:
