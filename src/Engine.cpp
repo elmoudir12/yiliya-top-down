@@ -42,7 +42,7 @@ void Engine::run() {
 void Engine::initWindow() {
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    m_window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Yir Top Down 3D", nullptr, nullptr);
+    m_window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Behest", nullptr, nullptr);
     glfwSetWindowUserPointer(m_window, this);
     glfwSetFramebufferSizeCallback(m_window, [](GLFWwindow* window, int width, int height) {
         auto* engine = reinterpret_cast<Engine*>(glfwGetWindowUserPointer(window));
@@ -398,7 +398,7 @@ void Engine::mainLoop() {
             m_editMode = !m_editMode;
             m_mouseDown = false;
             m_draggingBillboard = false;
-            glfwSetWindowTitle(m_window, m_editMode ? "Yir Top Down 3D [EDIT MODE]" : "Yir Top Down 3D");
+            glfwSetWindowTitle(m_window, m_editMode ? "Behest [EDIT MODE]" : "Behest");
             if (!m_editMode && currentMap) currentMap->selectBillboard(-1);
         }
         prevF2 = currF2;
@@ -436,9 +436,9 @@ void Engine::mainLoop() {
         }
         if (m_savedFlashFrames > 0) {
             --m_savedFlashFrames;
-            glfwSetWindowTitle(m_window, m_editMode ? "Yir Top Down 3D [EDIT MODE] [SAVED]" : "Yir Top Down 3D [SAVED]");
+            glfwSetWindowTitle(m_window, m_editMode ? "Behest [EDIT MODE] [SAVED]" : "Behest [SAVED]");
         } else {
-            glfwSetWindowTitle(m_window, m_editMode ? "Yir Top Down 3D [EDIT MODE]" : "Yir Top Down 3D");
+            glfwSetWindowTitle(m_window, m_editMode ? "Behest [EDIT MODE]" : "Behest");
         }
         prevF5 = currF5;
 
@@ -553,7 +553,7 @@ void Engine::createInstance() {
 
     VkApplicationInfo appInfo{};
     appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    appInfo.pApplicationName = "Yiliya Top Down";
+    appInfo.pApplicationName = "Behest";
     appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
     appInfo.pEngineName = "No Engine";
     appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
@@ -1441,7 +1441,7 @@ void Engine::loadMenuTextures() {
 
     // ---- Title ----
     {
-        const char* title = "TOP DOWN 2D GAME";
+        const char* title = "BEHEST";
         int titleSize = 48;
         int pad = 8;
         int tw = Font::textWidth(title, titleSize) + pad * 2;
