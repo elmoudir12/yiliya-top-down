@@ -13,6 +13,7 @@
 
 class Renderer;
 class Player;
+class Npc;
 class Map;
 class MapManager;
 class Texture;
@@ -70,6 +71,8 @@ public:
     glm::vec3 cameraPosition() const { return m_camEye; }
     float cameraYaw() const { return m_camYaw; }
     Texture* shadowTexture() const { return m_shadowTexture; }
+    Texture* candleTexture() const { return m_candleTexture; }
+    Npc* npc() const { return m_npc; }
     const glm::vec4& lightPos() const { return m_lightPos; }
     const glm::vec4& lightColor() const { return m_lightColor; }
     void setLightPos(const glm::vec4& p) { m_lightPos = p; }
@@ -151,6 +154,7 @@ private:
 
     Texture* m_playerDotTexture = nullptr;
     Texture* m_shadowTexture = nullptr;
+    Texture* m_candleTexture = nullptr;
     glm::vec4 m_lightPos{0.0f, 200.0f, 0.0f, 600.0f};   // front yard default
     glm::vec4 m_lightColor{1.0f, 1.0f, 1.0f, 0.35f};    // white, ambient 0.35
 
@@ -172,6 +176,7 @@ private:
 
     Renderer* m_renderer = nullptr;
     Player* m_player = nullptr;
+    Npc* m_npc = nullptr;
     MapManager* m_mapManager = nullptr;
 
     std::chrono::high_resolution_clock::time_point m_lastTime;

@@ -3,6 +3,7 @@
 #include "Player.h"
 #include "Map.h"
 #include "MapManager.h"
+#include "Npc.h"
 #include "Texture.h"
 #include "Font.h"
 #include <fstream>
@@ -135,6 +136,9 @@ void Engine::initVulkan() {
     m_player = new Player(this, m_renderer);
     m_mapManager = new MapManager(this, m_renderer, m_player);
     m_mapManager->loadMap("player_house");
+
+    m_npc = new Npc(this, m_renderer, "assets/nort");
+    m_npc->setPosition(glm::vec3(-110.0f, 0.0f, -140.0f)); // near the bed in player_house
 
     // Player dot texture for map overlay
     {
@@ -369,6 +373,7 @@ void Engine::mainLoop() {
         } else if (!m_showMap) {
             if (!m_mapManager->isTransitioning() && currentMap) {
                 m_player->update(deltaTime, currentMap);
+                if (m_npc) m_npc->update(deltaTime, currentMap, m_player->position());
             }
             m_mapManager->update(deltaTime);
         }
@@ -474,6 +479,7 @@ void Engine::mainLoop() {
                     renderMapOverlay(currentMap, m_player);
                 } else {
                     m_mapManager->render();
+                    if (m_npc) m_npc->render();
                     m_player->render();
                 }
             }
@@ -509,6 +515,7 @@ void Engine::cleanup() {
     Font::shutdown();
     delete m_mapManager;
     delete m_player;
+    delete m_npc;
     delete m_renderer;
     delete m_playerDotTexture;
     delete m_shadowTexture;

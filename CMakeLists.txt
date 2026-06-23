@@ -14,6 +14,7 @@ add_executable(yiliya_game
     src/Renderer.cpp
     src/Texture.cpp
     src/Player.cpp
+    src/Npc.cpp
     src/Map.cpp
     src/MapManager.cpp
     src/Font.cpp

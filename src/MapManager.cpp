@@ -3,6 +3,7 @@
 #include "Engine.h"
 #include "Renderer.h"
 #include "Player.h"
+#include "Npc.h"
 #include <cmath>
 
 MapManager::MapManager(Engine* engine, Renderer* renderer, Player* player)
@@ -55,6 +56,10 @@ void MapManager::update(float deltaTime) {
                 m_targetSpawnX, m_targetSpawnY,
                 m_currentMap->tileSize(), m_currentMap->width(), m_currentMap->height());
             m_player->setPosition(spawnPos);
+            if (m_engine->npc()) {
+                glm::vec3 npcSpawn = spawnPos + glm::vec3(-32.0f, 0.0f, 32.0f);
+                m_engine->npc()->setPosition(npcSpawn);
+            }
         }
         if (!m_fadingOut && m_fadeTimer >= m_fadeDuration) {
             m_transitioning = false;
