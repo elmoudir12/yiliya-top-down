@@ -330,8 +330,6 @@ void Map::load(const std::string& mapName) {
     if (m_decorationTexture) { delete m_decorationTexture; m_decorationTexture = nullptr; }
     if (mapName == "front_yard") {
         m_decorationTexture = new Texture(m_engine, "assets/front house of the player.png");
-        // Place at the exit door (transition tile 10, 2), right at the north edge
-        // of the map so it acts as a "guard" figure at the doorway.
         float hw3 = m_width * m_tileSize * 0.5f;
         float hh3 = m_height * m_tileSize * 0.5f;
         m_decorationPos = glm::vec3(
@@ -341,6 +339,46 @@ void Map::load(const std::string& mapName) {
         );
         m_decorationScale = 6.0f;
     }
+    m_selectedBillboard = -1;
+}
+
+int Map::billboardCount() const {
+    int count = 0;
+    if (m_decorationTexture) ++count;
+    count += (int)m_trees.size();
+    return count;
+}
+
+glm::vec3 Map::billboardPosition(int index) const {
+    int decoOffset = (m_decorationTexture ? 1 : 0);
+    if (m_decorationTexture && index == 0)
+        return m_decorationPos;
+    int treeIdx = index - decoOffset;
+    if (treeIdx >= 0 && treeIdx < (int)m_trees.size())
+        return glm::vec3(m_trees[treeIdx].x, 0.0f, m_trees[treeIdx].z);
+    return glm::vec3(0.0f);
+}
+
+void Map::setBillboardPosition(int index, const glm::vec3& pos) {
+    int decoOffset = (m_decorationTexture ? 1 : 0);
+    if (m_decorationTexture && index == 0) {
+        m_decorationPos = pos;
+        return;
+    }
+    int treeIdx = index - decoOffset;
+    if (treeIdx >= 0 && treeIdx < (int)m_trees.size()) {
+        m_trees[treeIdx].x = pos.x;
+        m_trees[treeIdx].z = pos.z;
+    }
+}
+
+std::string Map::billboardName(int index) const {
+    int decoOffset = (m_decorationTexture ? 1 : 0);
+    if (m_decorationTexture && index == 0) return "front house";
+    int treeIdx = index - decoOffset;
+    if (treeIdx >= 0 && treeIdx < (int)m_trees.size())
+        return "tree " + std::to_string(treeIdx);
+    return "?";
 }
 
 void Map::unload() {
@@ -930,7 +968,7 @@ void Map::render() {
         glm::vec4 vb = m_decorationTexture->visibleBounds();
         float yOffset = (vb.w / texSize.y) * scaleY - scaleY * 0.5f;
         glm::vec3 pos3D = m_decorationPos;
-        pos3D.y = yOffset;
+        pos3D.y = yOffset - 10.0f;
         glm::mat4 model = glm::translate(glm::mat4(1.0f), pos3D);
         // No rotation — sprite stays fixed
         model = glm::scale(model, glm::vec3(scaleX, -scaleY, 1.0f));

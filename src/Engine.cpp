@@ -50,7 +50,30 @@ void Engine::initWindow() {
     glfwSetCursorPosCallback(m_window, [](GLFWwindow* window, double x, double y) {
         auto* engine = reinterpret_cast<Engine*>(glfwGetWindowUserPointer(window));
         if (!engine) return;
-        if (engine->m_mouseDown) {
+
+        // Billboard dragging in edit mode
+        Map* curMap = engine->m_mapManager ? engine->m_mapManager->currentMap() : nullptr;
+        if (engine->m_draggingBillboard && engine->m_editMode && curMap && curMap->selectedBillboard() >= 0) {
+            double dx = x - engine->m_lastMouseX;
+            double dy = y - engine->m_lastMouseY;
+            engine->m_lastMouseX = x;
+            engine->m_lastMouseY = y;
+
+            float yawRad = glm::radians(engine->m_camYaw);
+            glm::vec3 rightDir(std::cos(yawRad), 0.0f, -std::sin(yawRad));
+            glm::vec3 fwdDir(std::sin(yawRad), 0.0f, std::cos(yawRad));
+            float sensitivity = 0.5f;
+            glm::vec3 delta = rightDir * (float)(dx * sensitivity) + fwdDir * (float)(-dy * sensitivity);
+
+            int sel = curMap->selectedBillboard();
+            if (sel >= 0) {
+                glm::vec3 pos = curMap->billboardPosition(sel);
+                curMap->setBillboardPosition(sel, pos + delta);
+            }
+            return;
+        }
+
+        if (engine->m_mouseDown || engine->m_rightMouseDown) {
             double dx = x - engine->m_lastMouseX;
             double dy = y - engine->m_lastMouseY;
             engine->m_camYaw -= static_cast<float>(dx * 0.3);
@@ -65,6 +88,17 @@ void Engine::initWindow() {
         if (!engine) return;
         if (button == GLFW_MOUSE_BUTTON_LEFT) {
             engine->m_mouseDown = (action == GLFW_PRESS);
+            if (action == GLFW_PRESS && engine->m_editMode) {
+                engine->clickPickBillboard();
+                Map* map = engine->m_mapManager ? engine->m_mapManager->currentMap() : nullptr;
+                if (map && map->selectedBillboard() >= 0)
+                    engine->m_draggingBillboard = true;
+            }
+            if (action == GLFW_RELEASE)
+                engine->m_draggingBillboard = false;
+        }
+        if (button == GLFW_MOUSE_BUTTON_RIGHT) {
+            engine->m_rightMouseDown = (action == GLFW_PRESS);
         }
     });
     glfwSetScrollCallback(m_window, [](GLFWwindow* window, double x, double y) {
@@ -242,6 +276,44 @@ void Engine::renderMapOverlay(Map* map, Player* player) {
     }
 }
 
+void Engine::clickPickBillboard() {
+    Map* map = m_mapManager ? m_mapManager->currentMap() : nullptr;
+    if (!map) return;
+    int count = map->billboardCount();
+    fprintf(stderr, "clickPick: %d billboards\n", count);
+    if (count == 0) { map->selectBillboard(-1); return; }
+
+    double mx, my;
+    glfwGetCursorPos(m_window, &mx, &my);
+    VkExtent2D ext = m_swapChainExtent;
+    fprintf(stderr, "mouse: %.0f,%.0f  ext: %dx%d\n", mx, my, ext.width, ext.height);
+
+    // Use screen-space distance instead of raycasting
+    glm::mat4 pv = m_projMatrix * m_viewMatrix;
+    int best = -1;
+    float bestDist = 1e30f;
+    for (int i = 0; i < count; ++i) {
+        glm::vec3 wp = map->billboardPosition(i);
+        wp.y = 32.0f;
+        glm::vec4 clip = pv * glm::vec4(wp, 1.0f);
+        if (clip.w <= 0.0f) continue;
+        float ndx = clip.x / clip.w;
+        float ndy = clip.y / clip.w;
+        float sx = (ndx + 1.0f) * 0.5f * ext.width;
+        float sy = (ndy + 1.0f) * 0.5f * ext.height;
+        float d = std::sqrt((sx - mx) * (sx - mx) + (sy - my) * (sy - my));
+        fprintf(stderr, "  bill %d -> screen %.0f,%.0f  dist %.1f\n", i, sx, sy, d);
+        if (d < bestDist) {
+            bestDist = d;
+            best = i;
+        }
+    }
+    float threshold = 30.0f;
+    if (bestDist > threshold) best = -1;
+    fprintf(stderr, "selected: %d (dist %.1f)\n", best, bestDist);
+    map->selectBillboard(best);
+}
+
 void Engine::updateCamera() {
     VkExtent2D extent = m_swapChainExtent;
     float aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
@@ -295,6 +367,41 @@ void Engine::mainLoop() {
         if (currF1 && !prevF1) m_showCollisions = !m_showCollisions;
         prevF1 = currF1;
 
+        static bool prevF2 = false;
+        bool currF2 = glfwGetKey(m_window, GLFW_KEY_F2) == GLFW_PRESS;
+        if (currF2 && !prevF2) {
+            m_editMode = !m_editMode;
+            m_mouseDown = false;
+            m_draggingBillboard = false;
+            glfwSetWindowTitle(m_window, m_editMode ? "Yir Top Down 3D [EDIT MODE]" : "Yir Top Down 3D");
+            if (!m_editMode && currentMap) currentMap->selectBillboard(-1);
+        }
+        prevF2 = currF2;
+
+        // Edit mode: arrow keys move selected billboard
+        if (m_editMode && currentMap && currentMap->selectedBillboard() >= 0) {
+            float step = glfwGetKey(m_window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS ? 10.0f : 1.0f;
+            glm::vec3 pos = currentMap->billboardPosition(currentMap->selectedBillboard());
+            bool moved = false;
+            if (glfwGetKey(m_window, GLFW_KEY_LEFT) == GLFW_PRESS) { pos.x -= step; moved = true; }
+            if (glfwGetKey(m_window, GLFW_KEY_RIGHT) == GLFW_PRESS) { pos.x += step; moved = true; }
+            if (glfwGetKey(m_window, GLFW_KEY_UP) == GLFW_PRESS) { pos.z += step; moved = true; }
+            if (glfwGetKey(m_window, GLFW_KEY_DOWN) == GLFW_PRESS) { pos.z -= step; moved = true; }
+            if (glfwGetKey(m_window, GLFW_KEY_PAGE_UP) == GLFW_PRESS) { pos.y += step; moved = true; }
+            if (glfwGetKey(m_window, GLFW_KEY_PAGE_DOWN) == GLFW_PRESS) { pos.y -= step; moved = true; }
+            if (moved) currentMap->setBillboardPosition(currentMap->selectedBillboard(), pos);
+        }
+
+        // Tab to cycle billboards in edit mode
+        static bool prevTab = false;
+        bool currTab = glfwGetKey(m_window, GLFW_KEY_TAB) == GLFW_PRESS;
+        if (m_editMode && currTab && !prevTab && currentMap) {
+            int next = currentMap->selectedBillboard() + 1;
+            if (next >= currentMap->billboardCount()) next = 0;
+            currentMap->selectBillboard(next);
+        }
+        prevTab = currTab;
+
         static bool prevM = false;
         bool currM = glfwGetKey(m_window, GLFW_KEY_M) == GLFW_PRESS;
         if (currM && !prevM && !m_showMenu) { m_showMap = !m_showMap; m_mouseDown = false; }
@@ -330,6 +437,19 @@ void Engine::mainLoop() {
 
             if (m_showCollisions && currentMap && !m_showMap && !m_showMenu) {
                 renderCollisionDebug(currentMap, m_player);
+            }
+
+            if (m_editMode && currentMap && currentMap->selectedBillboard() >= 0 && !m_showMap && !m_showMenu) {
+                int sel = currentMap->selectedBillboard();
+                glm::vec3 pos = currentMap->billboardPosition(sel);
+                std::string name = currentMap->billboardName(sel);
+                glm::vec4 highlightCol(1.0f, 0.8f, 0.0f, 1.0f);
+                m_renderer->drawDebugBox(pos - glm::vec3(16, 0, 16), pos + glm::vec3(16, 64, 16), highlightCol);
+                // Axis arrows: X=red, Y=green, Z=blue
+                m_renderer->drawDebugBox(pos, pos + glm::vec3(24, 1, 1), glm::vec4(1, 0, 0, 1));
+                m_renderer->drawDebugBox(pos, pos + glm::vec3(1, 24, 1), glm::vec4(0, 1, 0, 1));
+                m_renderer->drawDebugBox(pos, pos + glm::vec3(1, 1, 24), glm::vec4(0, 0, 1, 1));
+                (void)name;
             }
 
             m_renderer->endFrame();

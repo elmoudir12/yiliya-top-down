@@ -132,11 +132,14 @@ private:
     glm::mat4 m_projMatrix{ 1.0f };
     double m_lastMouseX = 0.0, m_lastMouseY = 0.0;
     bool m_mouseDown = false;
+    bool m_rightMouseDown = false;
+    bool m_draggingBillboard = false;
 
     float m_mapWorldWidth = 0.0f;
     float m_mapWorldHeight = 0.0f;
     bool m_showCollisions = false;
     bool m_showMap = false;
+    bool m_editMode = false;
 
     Texture* m_playerDotTexture = nullptr;
 
@@ -169,6 +172,7 @@ private:
     void updateCamera();
     void renderCollisionDebug(Map* map, Player* player);
     void renderMapOverlay(Map* map, Player* player);
+    void clickPickBillboard();
     void setWindowShouldClose() { m_framebufferResized = true; glfwSetWindowShouldClose(m_window, GLFW_TRUE); }
 
     void createInstance();

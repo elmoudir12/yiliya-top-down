@@ -65,7 +65,16 @@ public:
     int curWorldX() const { return m_curWorldX; }
     int curWorldY() const { return m_curWorldY; }
 
+    // Billboard editing
+    int billboardCount() const;
+    glm::vec3 billboardPosition(int index) const;
+    void setBillboardPosition(int index, const glm::vec3& pos);
+    std::string billboardName(int index) const;
+    int selectedBillboard() const { return m_selectedBillboard; }
+    void selectBillboard(int idx) { m_selectedBillboard = idx; }
+
 private:
+    int m_selectedBillboard = -1;
     struct LayerMesh {
         VkBuffer vertexBuffer = VK_NULL_HANDLE;
         VkDeviceMemory vertexBufferMemory = VK_NULL_HANDLE;
