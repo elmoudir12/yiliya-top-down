@@ -2,6 +2,7 @@
 #include "Engine.h"
 #include "Renderer.h"
 #include "Texture.h"
+#include "TmxLoader.h"
 
 #include <cstring>
 #include <stdexcept>
@@ -214,30 +215,14 @@ static Texture* createTimberTexture(Engine* engine) {
 struct MapMeta {
     int width, height;
     int worldX = 0, worldY = 0;
-    std::vector<Map::Transition> transitions;
-    std::vector<uint8_t> blocked;
-    int spawnTileX, spawnTileY;
-    bool walls = true;
-    bool grassFloor = false;
-    std::vector<std::pair<int,int>> trees;
+    struct MiniTransition { int tileX, tileY, tileW, tileH; std::string targetMap; };
+    std::vector<MiniTransition> transitions;
 };
 
 static const std::unordered_map<std::string, MapMeta>& getMapMeta() {
     static const std::unordered_map<std::string, MapMeta> meta = {
-        {"player_house", {
-            14, 11, 0, 0,
-            {{4, 11, 2, 1, "front_yard", 10, 1}},
-            std::vector<uint8_t>(14 * 11, 0),
-            4, 4, true, false, {},
-        }},
-        {"front_yard", {
-            27, 20, 0, 13,
-            {{10, -1, 1, 1, "player_house", 5, 9}},
-            std::vector<uint8_t>(27 * 20, 0),
-            14, 10, false, true,
-            {{3,3},{3,16},{7,3},{7,16},{11,3},{15,3},{19,3},{23,3},
-             {11,16},{15,16},{19,16},{23,16},{5,9},{9,13},{21,11}},
-        }},
+        {"player_house", {14, 11, 0, 0, {{4, 11, 2, 1, "front_yard"}}}},
+        {"front_yard",   {27, 20, 0, 13, {{10, -1, 1, 1, "player_house"}}}},
     };
     return meta;
 }
@@ -253,33 +238,66 @@ Map::~Map() {
 void Map::load(const std::string& mapName) {
     m_mapName = mapName;
 
-    const auto& meta = getMapMeta();
-    auto it = meta.find(mapName);
-    if (it == meta.end())
-        throw std::runtime_error("Unknown map: " + mapName);
+    TmxMapData tmx;
+    if (!loadTmx("maps/" + mapName + ".tmx", tmx))
+        throw std::runtime_error("Failed to load TMX map: " + mapName);
 
-    m_width = it->second.width;
-    m_height = it->second.height;
-    m_tileSize = 32;
-    m_transitions = it->second.transitions;
-    m_spawnTileX = it->second.spawnTileX;
-    m_spawnTileY = it->second.spawnTileY;
-    m_collisionGrid = it->second.blocked;
-    m_curWorldX = it->second.worldX;
-    m_curWorldY = it->second.worldY;
+    m_width = tmx.width;
+    m_height = tmx.height;
+    m_tileSize = tmx.tileSize;
+    m_curWorldX = 0;
+    m_curWorldY = 0;
 
-    if (static_cast<int>(m_collisionGrid.size()) != m_width * m_height)
-        throw std::runtime_error("Collision grid size mismatch for map: " + mapName);
+    // Determine floor type from ground tiles
+    bool isGrass = false;
+    for (int t : tmx.groundTiles) {
+        if (t == 0) { isGrass = false; break; } // wood
+        if (t == 1) { isGrass = true; break; }  // grass
+    }
 
-    if (!m_wallTexture) {
+    // Build collision grid from wall tiles and ground tiles
+    m_collisionGrid.resize(m_width * m_height);
+    for (int i = 0; i < m_width * m_height; ++i) {
+        m_collisionGrid[i] = 0;
+        if (!tmx.wallTiles.empty() && tmx.wallTiles[i] > 0)
+            m_collisionGrid[i] = 1;
+        if (tmx.groundTiles[i] == -1)
+            m_collisionGrid[i] = 1;
+    }
+
+    // Parse transitions from TMX objects
+    m_transitions.clear();
+    for (auto& obj : tmx.transitions) {
+        // TMX coords are pixel-based, origin top-left
+        // Convert to tile coords
+        int tileX = (int)(obj.x / m_tileSize);
+        int tileY = (int)(obj.y / m_tileSize);
+        int tileW = (int)(obj.width / m_tileSize);
+        int tileH = (int)(obj.height / m_tileSize);
+        if (tileW < 1) tileW = 1;
+        if (tileH < 1) tileH = 1;
+        std::string targetMap = "player_house";
+        int spawnX = 5, spawnY = 5;
+        auto it = obj.properties.find("targetMap");
+        if (it != obj.properties.end()) targetMap = it->second;
+        it = obj.properties.find("spawnX");
+        if (it != obj.properties.end()) spawnX = std::stoi(it->second);
+        it = obj.properties.find("spawnY");
+        if (it != obj.properties.end()) spawnY = std::stoi(it->second);
+        m_transitions.push_back({tileX, tileY, tileW, tileH, targetMap, spawnX, spawnY});
+    }
+
+    // Spawn
+    m_spawnTileX = (int)(tmx.spawn.x / m_tileSize);
+    m_spawnTileY = (int)(tmx.spawn.y / m_tileSize);
+    if (m_spawnTileX == 0 && m_spawnTileY == 0) { m_spawnTileX = 4; m_spawnTileY = 4; }
+
+    if (!m_wallTexture)
         m_wallTexture = createTimberTexture(m_engine);
-    }
-    if (!m_floorTexture) {
-        m_floorTexture = it->second.grassFloor
-            ? createGrassTexture(m_engine)
-            : createWoodFloorTexture(m_engine);
-    }
+    if (!m_floorTexture)
+        m_floorTexture = isGrass ? createGrassTexture(m_engine) : createWoodFloorTexture(m_engine);
 
+    // Door gaps from transitions
     m_doorGaps.clear();
     {
         float hw2 = m_width * m_tileSize * 0.5f;
@@ -303,32 +321,36 @@ void Map::load(const std::string& mapName) {
 
     buildFloorTop();
     buildFloorBottom();
-    if (it->second.walls)
-        buildWalls();
-    else
+    if (!tmx.wallTiles.empty()) {
+        bool hasWall = false;
+        for (int v : tmx.wallTiles) { if (v > 0) { hasWall = true; break; } }
+        if (hasWall) buildWalls();
+    }
+    if (!tmx.fenceRects.empty())
         buildBoundaryFence();
 
     generateMapTexture();
 
-    // Build trees
+    // Build trees from TMX objects
     m_trees.clear();
     if (m_treeTexture) { delete m_treeTexture; m_treeTexture = nullptr; }
     m_treeCollisionStart = -1;
-    if (!it->second.trees.empty()) {
+    if (!tmx.trees.empty()) {
         m_treeTexture = createTreeTexture(m_engine);
         float hw3 = m_width * m_tileSize * 0.5f;
         float hh3 = m_height * m_tileSize * 0.5f;
         m_treeCollisionStart = (int)m_collisionRects.size();
-        for (auto& t : it->second.trees) {
-            float wx = t.first * m_tileSize - hw3 + m_tileSize * 0.5f;
-            float wz = t.second * m_tileSize - hh3 + m_tileSize * 0.5f;
+        for (auto& obj : tmx.trees) {
+            // TMX coords: pixel-based, origin top-left
+            // Convert to world coords: x = pixelX - hw, z = pixelY - hh
+            float wx = obj.x - hw3;
+            float wz = obj.y - hh3;
             m_trees.push_back({wx, wz, 1.0f});
-            // Tree collision: 16x16 rect centered on tree
-            m_collisionRects.push_back({wx + hw3 - 8, wz + hh3 - 8, 16, 16});
+            m_collisionRects.push_back({obj.x - 8, obj.y - 8, 16, 16});
         }
     }
 
-    // Static decoration billboard (e.g., player sprite at exit door)
+    // Static decoration billboard
     if (m_decorationTexture) { delete m_decorationTexture; m_decorationTexture = nullptr; }
     if (mapName == "front_yard") {
         m_decorationTexture = new Texture(m_engine, "assets/front house of the player.png");
@@ -868,6 +890,7 @@ void Map::generateMapTexture() {
             auto& metaB = itB->second;
             for (auto& tb : metaB.transitions) {
                 if (tb.targetMap != nameA) continue;
+                (void)tb;
                 float ax = (metaA.worldX + t.tileX + t.tileW * 0.5f - minX) * PIX_PER_TILE;
                 float ay = (metaA.worldY + t.tileY + t.tileH * 0.5f - minY) * PIX_PER_TILE;
                 float bx = (metaB.worldX + tb.tileX + tb.tileW * 0.5f - minX) * PIX_PER_TILE;
@@ -971,71 +994,113 @@ Map::Transition* Map::checkTransition(int tileX, int tileY) {
     return nullptr;
 }
 
-static Texture* createDirtTexture(Engine* engine) {
-    const int S = 32;
-    std::vector<uint8_t> p(S * S * 4, 255);
-    auto clamp8 = [](int v) { return (uint8_t)(v < 0 ? 0 : v > 255 ? 255 : v); };
-    auto hash = [](int x, int y) -> unsigned {
-        unsigned h = (unsigned)(x * 374761393 + y * 668265263);
-        h = (h ^ (h >> 13)) * 1274126177u;
-        return (h ^ (h >> 16)) & 0xFF;
-    };
-    for (int y = 0; y < S; ++y) {
-        for (int x = 0; x < S; ++x) {
-            unsigned h = hash(x, y);
-            unsigned h2 = hash(x ^ 31, y ^ 17);
-            int r = 90 + (h % 30);
-            int g = 65 + (h % 20);
-            int b = 35 + (h % 15);
-            // Small pebbles/stones
-            if ((h2 % 8) == 0) { r += 25; g += 20; b += 15; }
-            // Darker patches (moisture/organic)
-            if ((hash(x+7, y+11) % 12) == 0) { r -= 15; g -= 10; b -= 5; }
-            p[(y * S + x) * 4 + 0] = clamp8(r);
-            p[(y * S + x) * 4 + 1] = clamp8(g);
-            p[(y * S + x) * 4 + 2] = clamp8(b);
-            p[(y * S + x) * 4 + 3] = 255;
-        }
-    }
-    return new Texture(engine, p.data(), S, S,
-        VK_SAMPLER_ADDRESS_MODE_REPEAT, VK_SAMPLER_ADDRESS_MODE_REPEAT);
-}
-
 void Map::buildDirtPath() {
-    if (!m_dirtTexture)
-        m_dirtTexture = createDirtTexture(m_engine);
+    if (!m_dirtTexture) {
+        // Pixel art dirt road texture (32x32, seamless)
+        const int S = 32;
+        std::vector<uint8_t> p(S * S * 4, 255);
+        auto hash = [](int x, int y) -> unsigned {
+            unsigned h = (unsigned)(x * 374761393 + y * 668265263);
+            h = (h ^ (h >> 13)) * 1274126177u;
+            return (h ^ (h >> 16)) & 0xFF;
+        };
+        // 5-shade earth palette
+        uint8_t c[5][3] = {
+            {145, 105, 60},  // base
+            {160, 118, 68},  // light
+            {125, 88, 48},   // dark
+            {100, 68, 35},   // shadow/edge
+            {75,  50, 22},   // deep
+        };
+        for (int y = 0; y < S; ++y) {
+            for (int x = 0; x < S; ++x) {
+                unsigned h2 = hash(x+3, y+7);
+                unsigned h3 = hash(x*5+11, y*3+13);
+                int idx = 0;
+                // Large patches of lighter/darker
+                int patch = hash(x/4, y/4) % 7;
+                if (patch == 0) idx = 1;
+                else if (patch == 1) idx = 2;
+                else if (patch == 2) idx = 3;
+                // Small pebbles (single pixel)
+                if ((h2 % 13) == 0) idx = 3;
+                if ((h3 % 19) == 0) idx = 4;
+                // Wheel rut bands (subtle horizontal dark strips)
+                int wy = (y + 6) % 32;
+                if (wy >= 10 && wy <= 14 && (hash(x, y>>1) % 5) < 2) idx = 2;
+                int wy2 = (y + 20) % 32;
+                if (wy2 >= 10 && wy2 <= 14 && (hash(x+5, y>>1) % 5) < 2) idx = 2;
+                // Edge wear (slightly darker near edges)
+                if (x < 2 || x >= S-2 || y < 2 || y >= S-2) {
+                    if ((hash(x+y, x-y) % 3) == 0) idx = idx < 2 ? 2 : idx;
+                }
+                p[(y * S + x) * 4 + 0] = c[idx][0];
+                p[(y * S + x) * 4 + 1] = c[idx][1];
+                p[(y * S + x) * 4 + 2] = c[idx][2];
+                p[(y * S + x) * 4 + 3] = 255;
+            }
+        }
+        m_dirtTexture = new Texture(m_engine, p.data(), S, S,
+            VK_SAMPLER_ADDRESS_MODE_REPEAT, VK_SAMPLER_ADDRESS_MODE_REPEAT);
+    }
 
     float ts = (float)m_tileSize;
     float hw = m_width * ts * 0.5f;
     float hh = m_height * ts * 0.5f;
 
-    // Path center tiles (x, z) in tile coords, winding through front_yard
+    // Spine points in tile coords
     struct Pt { float x, z; };
-    std::vector<Pt> centers = {
-        {10.0f, 1.5f}, {10.5f, 3.0f}, {10.0f, 4.5f},
-        {10.5f, 6.0f}, {10.0f, 7.5f}, {9.5f, 9.0f},
-        {10.0f, 10.5f}, {10.5f, 12.0f}, {10.0f, 13.5f},
-        {10.0f, 15.0f}, {10.0f, 16.5f}, {10.0f, 18.0f},
-    };
+    std::vector<Pt> spine;
+    auto sp = [&](float tx, float tz) { spine.push_back({tx * ts - hw, tz * ts - hh}); };
+    sp(10.0f, 0.0f); sp(10.5f, 1.5f); sp(10.0f, 3.0f);
+    sp(10.5f, 4.5f); sp(10.0f, 6.0f); sp(9.5f, 7.5f);
+    sp(10.0f, 9.0f); sp(10.5f, 10.5f); sp(10.0f, 12.0f);
+    sp(10.0f, 13.5f); sp(10.0f, 15.0f); sp(10.0f, 16.5f);
+    sp(10.0f, 18.0f); sp(10.0f, 20.0f);
+
+    size_t n = spine.size();
+    const float halfW = ts * 1.0f;
+
+    // Compute averaged perpendicular at each joint
+    struct { glm::vec2 perp; } joint[32];
+    for (size_t i = 0; i < n; ++i) {
+        glm::vec2 dir(0.0f);
+        if (i > 0) { glm::vec2 d = {spine[i].x - spine[i-1].x, spine[i].z - spine[i-1].z}; dir += glm::normalize(d); }
+        if (i+1 < n) { glm::vec2 d = {spine[i+1].x - spine[i].x, spine[i+1].z - spine[i].z}; dir += glm::normalize(d); }
+        if (glm::length(dir) < 0.001f) dir = {0.0f, 1.0f};
+        dir = glm::normalize(dir);
+        joint[i].perp = {-dir.y, dir.x};
+    }
+
+    float totalLen = 0.0f;
+    for (size_t i = 0; i+1 < n; ++i)
+        totalLen += sqrt((spine[i+1].x - spine[i].x) * (spine[i+1].x - spine[i].x) +
+                         (spine[i+1].z - spine[i].z) * (spine[i+1].z - spine[i].z));
 
     std::vector<QuadVertex> verts;
     std::vector<uint16_t> idxs;
+    float acc = 0.0f;
 
-    for (auto& c : centers) {
-        float cx = c.x * ts - hw;
-        float cz = c.z * ts - hh;
-        float halfW = ts * 1.25f;
-        float halfH = ts * 0.6f;
-        float x0 = cx - halfW, x1 = cx + halfW;
-        float z0 = cz - halfH, z1 = cz + halfH;
+    for (size_t i = 0; i+1 < n; ++i) {
+        float segLen = sqrt((spine[i+1].x - spine[i].x) * (spine[i+1].x - spine[i].x) +
+                            (spine[i+1].z - spine[i].z) * (spine[i+1].z - spine[i].z));
+        float uv0 = acc / totalLen;
+        float uv1 = (acc + segLen) / totalLen;
+
+        glm::vec2 p0 = {spine[i].x - joint[i].perp.x * halfW, spine[i].z - joint[i].perp.y * halfW};
+        glm::vec2 p1 = {spine[i].x + joint[i].perp.x * halfW, spine[i].z + joint[i].perp.y * halfW};
+        glm::vec2 p2 = {spine[i+1].x + joint[i+1].perp.x * halfW, spine[i+1].z + joint[i+1].perp.y * halfW};
+        glm::vec2 p3 = {spine[i+1].x - joint[i+1].perp.x * halfW, spine[i+1].z - joint[i+1].perp.y * halfW};
 
         uint32_t base = (uint32_t)verts.size();
-        verts.push_back({{x0, 0.01f, z0}, {0.0f, 0.0f}});
-        verts.push_back({{x1, 0.01f, z0}, {1.0f, 0.0f}});
-        verts.push_back({{x1, 0.01f, z1}, {1.0f, 1.0f}});
-        verts.push_back({{x0, 0.01f, z1}, {0.0f, 1.0f}});
+        verts.push_back({{p0.x, 0.01f, p0.y}, {0.0f, uv0}});
+        verts.push_back({{p1.x, 0.01f, p1.y}, {1.0f, uv0}});
+        verts.push_back({{p2.x, 0.01f, p2.y}, {1.0f, uv1}});
+        verts.push_back({{p3.x, 0.01f, p3.y}, {0.0f, uv1}});
         idxs.push_back(base+0); idxs.push_back(base+1); idxs.push_back(base+2);
         idxs.push_back(base+2); idxs.push_back(base+3); idxs.push_back(base+0);
+
+        acc += segLen;
     }
 
     m_dirtPathMesh.indexCount = (uint32_t)idxs.size();

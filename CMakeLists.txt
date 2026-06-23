@@ -17,6 +17,7 @@ add_executable(yiliya_game
     src/Map.cpp
     src/MapManager.cpp
     src/Font.cpp
+    src/TmxLoader.cpp
 )
 
 target_include_directories(yiliya_game PRIVATE

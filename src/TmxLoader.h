@@ -2,10 +2,14 @@
 
 #include <string>
 #include <vector>
+#include <unordered_map>
 #include <cstdint>
 
-struct CollisionRect {
-    float x, y, w, h;
+struct TmxObject {
+    float x = 0, y = 0, width = 0, height = 0;
+    std::string name;
+    std::string type;
+    std::unordered_map<std::string, std::string> properties;
 };
 
 struct TmxMapData {
@@ -13,9 +17,11 @@ struct TmxMapData {
     int height = 0;
     int tileSize = 32;
     std::vector<int> groundTiles;
-    std::vector<int> collisionTiles;
-    std::vector<std::vector<int>> tileLayers;
-    std::vector<CollisionRect> collisionRects;
+    std::vector<int> wallTiles;
+    std::vector<TmxObject> transitions;
+    std::vector<TmxObject> trees;
+    std::vector<TmxObject> fenceRects;
+    TmxObject spawn;
 };
 
 bool loadTmx(const std::string& filepath, TmxMapData& out);
