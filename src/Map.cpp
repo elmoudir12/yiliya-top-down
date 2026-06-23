@@ -232,7 +232,7 @@ static const std::unordered_map<std::string, MapMeta>& getMapMeta() {
         }},
         {"front_yard", {
             27, 20, 0, 13,
-            {{10, -1, 5, 1, "player_house", 5, 8}},
+            {{10, -1, 1, 1, "player_house", 5, 8}},
             std::vector<uint8_t>(27 * 20, 0),
             14, 10, false, true,
             {{3,3},{3,16},{7,3},{7,16},{11,3},{15,3},{19,3},{23,3},
