@@ -232,7 +232,7 @@ static const std::unordered_map<std::string, MapMeta>& getMapMeta() {
         }},
         {"front_yard", {
             27, 20, 0, 13,
-            {{10, 2, 5, 1, "player_house", 5, 8}},
+            {{10, 0, 5, 1, "player_house", 5, 8}},
             std::vector<uint8_t>(27 * 20, 0),
             14, 10, false, true,
             {{3,3},{3,16},{7,3},{7,16},{11,3},{15,3},{19,3},{23,3},
@@ -324,6 +324,22 @@ void Map::load(const std::string& mapName) {
             m_collisionRects.push_back({wx + hw3 - 8, wz + hh3 - 8, 16, 16});
         }
     }
+
+    // Static decoration billboard (e.g., player sprite at exit door)
+    if (m_decorationTexture) { delete m_decorationTexture; m_decorationTexture = nullptr; }
+    if (mapName == "front_yard") {
+        m_decorationTexture = new Texture(m_engine, "assets/front house of the player.png");
+        // Place at the exit door (transition tile 10, 2), right at the north edge
+        // of the map so it acts as a "guard" figure at the doorway.
+        float hw3 = m_width * m_tileSize * 0.5f;
+        float hh3 = m_height * m_tileSize * 0.5f;
+        m_decorationPos = glm::vec3(
+            10 * m_tileSize + m_tileSize * 0.5f - hw3,
+            0.0f,
+            2 * m_tileSize + m_tileSize * 0.5f - hh3 - 80.0f
+        );
+        m_decorationScale = 6.0f;
+    }
 }
 
 void Map::unload() {
@@ -341,6 +357,10 @@ void Map::unload() {
     if (m_treeTexture) {
         delete m_treeTexture;
         m_treeTexture = nullptr;
+    }
+    if (m_decorationTexture) {
+        delete m_decorationTexture;
+        m_decorationTexture = nullptr;
     }
     if (m_mapOverlayTexture) {
         delete m_mapOverlayTexture;
@@ -871,5 +891,22 @@ void Map::render() {
             model = glm::scale(model, glm::vec3(s, -s, 1));
             m_renderer->drawSprite3D(m_treeTexture->descriptorSet(), model);
         }
+    }
+
+    // Static decoration sprite (fixed orientation, does NOT rotate with camera)
+    if (m_decorationTexture) {
+        glm::vec2 texSize = m_decorationTexture->size();
+        float aspect = texSize.x / texSize.y;
+        float scaleX = 64.0f * m_decorationScale;
+        float scaleY = scaleX / aspect;
+        // Position sprite so visible feet touch the ground (y=0)
+        glm::vec4 vb = m_decorationTexture->visibleBounds();
+        float yOffset = (vb.w / texSize.y) * scaleY - scaleY * 0.5f;
+        glm::vec3 pos3D = m_decorationPos;
+        pos3D.y = yOffset;
+        glm::mat4 model = glm::translate(glm::mat4(1.0f), pos3D);
+        // No rotation — sprite stays fixed
+        model = glm::scale(model, glm::vec3(scaleX, -scaleY, 1.0f));
+        m_renderer->drawSprite3D(m_decorationTexture->descriptorSet(), model);
     }
 }

@@ -94,6 +94,9 @@ private:
     Texture* m_wallTexture = nullptr;
     Texture* m_floorTexture = nullptr;
     Texture* m_treeTexture = nullptr;
+    Texture* m_decorationTexture = nullptr;
+    glm::vec3 m_decorationPos{ 0.0f, 0.0f, 0.0f };
+    float m_decorationScale = 1.0f;
     struct Tree { float x, z; float scale; };
     std::vector<Tree> m_trees;
 
