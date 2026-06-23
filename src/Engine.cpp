@@ -63,7 +63,7 @@ void Engine::initWindow() {
             glm::vec3 rightDir(std::cos(yawRad), 0.0f, -std::sin(yawRad));
             glm::vec3 fwdDir(std::sin(yawRad), 0.0f, std::cos(yawRad));
             float sensitivity = 0.5f;
-            glm::vec3 delta = rightDir * (float)(dx * sensitivity) + fwdDir * (float)(-dy * sensitivity);
+            glm::vec3 delta = (rightDir * (float)dx + fwdDir * (float)dy) * sensitivity;
 
             int sel = curMap->selectedBillboard();
             if (sel >= 0) {
@@ -308,8 +308,7 @@ void Engine::clickPickBillboard() {
             best = i;
         }
     }
-    float threshold = 30.0f;
-    if (bestDist > threshold) best = -1;
+    if (bestDist > 80.0f) best = -1;
     fprintf(stderr, "selected: %d (dist %.1f)\n", best, bestDist);
     map->selectBillboard(best);
 }
