@@ -289,10 +289,11 @@ void Map::load(const std::string& mapName) {
             float x1 = (t.tileX + t.tileW) * m_tileSize - hw2;
             float z0 = t.tileY * m_tileSize - hh2;
             float z1 = (t.tileY + t.tileH) * m_tileSize - hh2;
+            float pad = (t.tileY < 0) ? 16.0f : 0.0f;
             if (t.tileY + t.tileH >= m_height)
                 m_doorGaps.push_back({1, x0, x1});
             if (t.tileY <= 0)
-                m_doorGaps.push_back({0, x0, x1});
+                m_doorGaps.push_back({0, x0 - pad, x1 + pad});
             if (t.tileX + t.tileW >= m_width)
                 m_doorGaps.push_back({3, z0, z1});
             if (t.tileX <= 0)

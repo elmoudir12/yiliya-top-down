@@ -3,6 +3,7 @@
 #include "Engine.h"
 #include "Renderer.h"
 #include "Player.h"
+#include <cmath>
 
 MapManager::MapManager(Engine* engine, Renderer* renderer, Player* player)
     : m_engine(engine), m_renderer(renderer), m_player(player) {
@@ -72,8 +73,8 @@ void MapManager::update(float deltaTime) {
     glm::vec3 playerPos = m_player->position();
     float hw = m_currentMap->width() * m_currentMap->tileSize() * 0.5f;
     float hh = m_currentMap->height() * m_currentMap->tileSize() * 0.5f;
-    int tileX = static_cast<int>((playerPos.x + hw) / m_currentMap->tileSize());
-    int tileY = static_cast<int>((playerPos.z + hh) / m_currentMap->tileSize());
+    int tileX = static_cast<int>(std::floor((playerPos.x + hw) / m_currentMap->tileSize()));
+    int tileY = static_cast<int>(std::floor((playerPos.z + hh) / m_currentMap->tileSize()));
 
     Map::Transition* transition = m_currentMap->checkTransition(tileX, tileY);
     if (transition) {
