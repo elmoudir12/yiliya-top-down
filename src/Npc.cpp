@@ -93,33 +93,39 @@ bool Npc::canMoveTo(float x, float z, const Map* map, const glm::vec3& playerPos
 }
 
 void Npc::update(float deltaTime, const Map* currentMap, const glm::vec3& target) {
-    m_moving = false;
-
     glm::vec3 diff = target - m_position;
     float dist = glm::length(diff);
 
-    // Direction based on movement
-    if (dist > STOP_DIST) {
+    // Always face the player (front sprite toward player)
+    if (dist > 0.01f) {
+        float angle = atan2f(-diff.x, -diff.z);
+        m_facingAngle = glm::degrees(angle);
+    }
+
+    bool wasMoving = m_moving;
+    m_moving = false;
+
+    // Hysteresis: start moving when farther than FOLLOW_DIST,
+    // sustain movement until within STOP_DIST
+    float moveThreshold = wasMoving ? STOP_DIST : FOLLOW_DIST;
+    if (dist > moveThreshold) {
         glm::vec3 dir = diff / dist;
         float step = MOVE_SPEED * deltaTime;
 
-        // Always face the player (front sprite toward player)
-            float angle = atan2f(-dir.x, -dir.z);
-            m_facingAngle = glm::degrees(angle);
+        float oldX = m_position.x;
+        float oldZ = m_position.z;
 
-        // Try X movement
-        float newX = m_position.x + dir.x * step;
-        if (canMoveTo(newX, m_position.z, currentMap, target)) {
+        // Try X movement (check against original Z)
+        float newX = oldX + dir.x * step;
+        if (canMoveTo(newX, oldZ, currentMap, target))
             m_position.x = newX;
-            m_moving = true;
-        }
 
-        // Try Z movement
-        float newZ = m_position.z + dir.z * step;
-        if (canMoveTo(m_position.x, newZ, currentMap, target)) {
+        // Try Z movement (check against original X)
+        float newZ = oldZ + dir.z * step;
+        if (canMoveTo(oldX, newZ, currentMap, target))
             m_position.z = newZ;
-            m_moving = true;
-        }
+
+        m_moving = (m_position.x != oldX || m_position.z != oldZ);
     }
 
     if (m_moving) {
