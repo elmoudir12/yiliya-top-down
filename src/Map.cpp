@@ -226,7 +226,7 @@ static const std::unordered_map<std::string, MapMeta>& getMapMeta() {
     static const std::unordered_map<std::string, MapMeta> meta = {
         {"player_house", {
             14, 11, 0, 0,
-            {{4, 10, 2, 1, "front_yard", 12, 4}},
+            {{4, 11, 2, 3, "front_yard", 12, 4}},
             std::vector<uint8_t>(14 * 11, 0),
             4, 4, true, false, {},
         }},
@@ -846,6 +846,13 @@ void Map::generateMapTexture() {
 }
 
 bool Map::isTileBlocked(int tileX, int tileY) const {
+    // Allow tiles within transition zones even slightly past the map edge
+    // so the player can walk through door gaps and trigger transitions.
+    for (auto& t : m_transitions) {
+        if (tileX >= t.tileX && tileX < t.tileX + t.tileW &&
+            tileY >= t.tileY && tileY < t.tileY + t.tileH)
+            return false;
+    }
     if (tileX < 0 || tileX >= m_width || tileY < 0 || tileY >= m_height) {
         return true;
     }
