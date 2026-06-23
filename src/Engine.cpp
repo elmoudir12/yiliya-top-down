@@ -89,6 +89,9 @@ void Engine::initWindow() {
         if (!engine) return;
         if (button == GLFW_MOUSE_BUTTON_LEFT) {
             engine->m_mouseDown = (action == GLFW_PRESS);
+            if (action == GLFW_PRESS && engine->m_showMenu) {
+                engine->m_menuClickPending = true;
+            }
             if (action == GLFW_PRESS && engine->m_editMode) {
                 engine->clickPickBillboard();
                 Map* map = engine->m_mapManager ? engine->m_mapManager->currentMap() : nullptr;
@@ -1517,8 +1520,7 @@ void Engine::handleMenuInput() {
         m_menuSelection = (m_menuSelection + 1) % MENU_OPTION_COUNT;
     }
 
-    // Mouse wheel: scroll up moves selection up, scroll down moves it down.
-    // Use an accumulator so quick scrolls register as multiple steps.
+    // Mouse wheel
     if (m_menuScrollAccum >= 1.0f) {
         int steps = (int)m_menuScrollAccum;
         m_menuSelection = (m_menuSelection - steps + MENU_OPTION_COUNT * steps) % MENU_OPTION_COUNT;
@@ -1528,17 +1530,53 @@ void Engine::handleMenuInput() {
         m_menuSelection = (m_menuSelection + steps) % MENU_OPTION_COUNT;
         m_menuScrollAccum += steps;
     }
-    // Decay leftover fractional scroll so it doesn't accumulate forever
     m_menuScrollAccum *= 0.5f;
     if (std::abs(m_menuScrollAccum) < 0.01f) m_menuScrollAccum = 0.0f;
 
-    if ((enter && !prevEnter) || (space && !prevSpace)) {
+    // --- Mouse hover over options ---
+    VkExtent2D ext = m_swapChainExtent;
+    const int optionSize = 28;
+    const float targetOptionPx = std::min(ext.width * 0.18f, 240.0f);
+    const float optionScale = targetOptionPx / Font::textWidth("NEW GAME", optionSize);
+    float representativeOptionH = m_menuOptionTextures[0] ? m_menuOptionTextures[0]->size().y * optionScale : 36.0f;
+    const float optionSpacing = representativeOptionH * 1.6f;
+    const float optionsStartY = (ext.height - optionSpacing * (MENU_OPTION_COUNT - 1)) * 0.5f;
+
+    for (int i = 0; i < MENU_OPTION_COUNT; ++i) {
+        if (!m_menuOptionTextures[i]) continue;
+        glm::vec2 os = m_menuOptionTextures[i]->size();
+        float drawPxW = os.x * optionScale;
+        float drawPxH = os.y * optionScale;
+        float ox = (ext.width - drawPxW) / 2.0f;
+        float oy = optionsStartY + i * optionSpacing;
+
+        if (m_lastMouseX >= ox && m_lastMouseX <= ox + drawPxW &&
+            m_lastMouseY >= oy && m_lastMouseY <= oy + drawPxH) {
+            m_menuSelection = i;
+        }
+    }
+
+    // --- Mouse click ---
+    if (m_menuClickPending) {
+        m_menuClickPending = false;
         switch (m_menuSelection) {
-            case 0: // NEW GAME
+            case 0:
                 m_showMenu = false;
                 m_mapManager->loadMap("player_house");
                 break;
-            case 1: // QUIT
+            case 1:
+                glfwSetWindowShouldClose(m_window, GLFW_TRUE);
+                break;
+        }
+    }
+
+    if ((enter && !prevEnter) || (space && !prevSpace)) {
+        switch (m_menuSelection) {
+            case 0:
+                m_showMenu = false;
+                m_mapManager->loadMap("player_house");
+                break;
+            case 1:
                 glfwSetWindowShouldClose(m_window, GLFW_TRUE);
                 break;
         }

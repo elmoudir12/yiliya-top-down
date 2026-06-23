@@ -142,6 +142,7 @@ private:
     glm::mat4 m_projMatrix{ 1.0f };
     double m_lastMouseX = 0.0, m_lastMouseY = 0.0;
     bool m_mouseDown = false;
+    bool m_menuClickPending = false;
     bool m_rightMouseDown = false;
     bool m_draggingBillboard = false;
 
