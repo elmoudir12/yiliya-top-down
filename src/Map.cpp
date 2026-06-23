@@ -354,10 +354,8 @@ void Map::load(const std::string& mapName) {
     }
     buildFloorTop();
     buildFloorBottom();
-    if (!tmx.wallTiles.empty()) {
-        bool hasWall = false;
-        for (int v : tmx.wallTiles) { if (v > 0) { hasWall = true; break; } }
-        if (hasWall) buildWalls();
+    if (m_mapName == "player_house") {
+        buildWalls();
     }
     if (!tmx.fenceRects.empty())
         buildBoundaryFence();
