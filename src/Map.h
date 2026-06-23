@@ -115,11 +115,23 @@ private:
     std::vector<Tree> m_trees;
     int m_treeCollisionStart = -1;
 
+    // Tileset-based rendering
+    struct TilesetSlot {
+        Texture* texture = nullptr;
+        int firstGid = 1;
+        int tileCount = 0;
+        int columns = 0;
+    };
+    std::vector<TilesetSlot> m_tilesetTextures;
+    LayerMesh m_tileFloorMesh;
+    bool m_useTileMesh = false;
+
     static constexpr float WALL_HEIGHT = 64.0f;
     static constexpr float WALL_THICK = 32.0f;
 
     void buildFloorTop();
     void buildFloorBottom();
+    void buildTiledFloor(const std::vector<int>& groundTiles);
     void buildWalls();
     void buildBoundaryFence();
     void buildDirtPath();

@@ -12,10 +12,21 @@ struct TmxObject {
     std::unordered_map<std::string, std::string> properties;
 };
 
+struct TmxTileset {
+    int firstGid = 1;
+    std::string imagePath;
+    int tileWidth = 32;
+    int tileHeight = 32;
+    int tileCount = 0;
+    int columns = 0;
+    bool valid = false;
+};
+
 struct TmxMapData {
     int width = 0;
     int height = 0;
     int tileSize = 32;
+    std::vector<TmxTileset> tilesets;
     std::vector<int> groundTiles;
     std::vector<int> wallTiles;
     std::vector<TmxObject> transitions;
