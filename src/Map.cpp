@@ -477,7 +477,9 @@ void Map::unload() {
     destroyMesh(m_wallMesh);
     destroyMesh(m_floorTopMesh);
     destroyMesh(m_floorBottomMesh);
-    destroyMesh(m_tileFloorMesh);
+    for (auto& mesh : m_tileFloorMeshes)
+        destroyMesh(mesh);
+    m_tileFloorMeshes.clear();
     if (m_floorTexture) {
         delete m_floorTexture;
         m_floorTexture = nullptr;
@@ -603,95 +605,84 @@ void Map::buildTiledFloor(const std::vector<int>& groundTiles) {
     float hh = m_height * m_tileSize * 0.5f;
     float ts = (float)m_tileSize;
 
-    // Find which tileset to use for the floor - find the one that covers the most tiles
-    int bestTilesetIdx = -1;
-    int bestCount = 0;
-    for (int ti = 0; ti < (int)m_tilesetTextures.size(); ++ti) {
-        auto& slot = m_tilesetTextures[ti];
-        if (!slot.texture) continue;
-        int count = 0;
-        for (int g : groundTiles) {
-            if (g >= slot.firstGid && g < slot.firstGid + slot.tileCount)
-                ++count;
-        }
-        if (count > bestCount) { bestCount = count; bestTilesetIdx = ti; }
-    }
-    if (bestTilesetIdx < 0) return;
-
-    auto& slot = m_tilesetTextures[bestTilesetIdx];
-    glm::vec2 texSize = slot.texture->size();
-    if (texSize.x < 1 || texSize.y < 1) return;
-    float invW = 1.0f / texSize.x;
-    float invH = 1.0f / texSize.y;
-
-    std::vector<QuadVertex> verts;
-    std::vector<uint16_t> idxs;
-    verts.reserve(groundTiles.size() * 4);
-    idxs.reserve(groundTiles.size() * 6);
-
-    for (int i = 0; i < (int)groundTiles.size(); ++i) {
-        int gid = groundTiles[i];
-        if (gid < 0) continue; // empty tile
-
-        int tx = i % m_width;
-        int ty = i / m_width;
-
-        float wx = tx * ts - hw;
-        float wz = ty * ts - hh;
-
-        // Find which tileset this GID belongs to
-        float u0, v0, u1, v1;
-        bool found = false;
-
-        for (auto& tslot : m_tilesetTextures) {
-            if (!tslot.texture) continue;
-            if (gid >= tslot.firstGid && gid < tslot.firstGid + tslot.tileCount) {
-                int localIdx = gid - tslot.firstGid;
-                glm::vec2 tsize = tslot.texture->size();
-                int tcols = tslot.columns > 0 ? tslot.columns : (int)(tsize.x / m_tileSize);
-                int col = localIdx % tcols;
-                int row = localIdx / tcols;
-                u0 = (float)col * m_tileSize / tsize.x;
-                v0 = (float)row * m_tileSize / tsize.y;
-                u1 = (float)(col + 1) * m_tileSize / tsize.x;
-                v1 = (float)(row + 1) * m_tileSize / tsize.y;
-                found = true;
+    // Count tiles per tileset to determine which ones are used
+    std::vector<bool> used(m_tilesetTextures.size(), false);
+    int usedCount = 0;
+    for (int g : groundTiles) {
+        if (g < 0) continue;
+        for (int ti = 0; ti < (int)m_tilesetTextures.size(); ++ti) {
+            auto& slot = m_tilesetTextures[ti];
+            if (!slot.texture) continue;
+            if (g >= slot.firstGid && g < slot.firstGid + slot.tileCount) {
+                if (!used[ti]) { used[ti] = true; ++usedCount; }
                 break;
             }
         }
+    }
+    if (usedCount == 0) return;
 
-        if (!found) {
-            // Fallback: use first tileset, UV for first tile
-            u0 = 0.0f; v0 = 0.0f; u1 = ts * invW; v1 = ts * invH;
+    // Build separate mesh per tileset
+    m_tileFloorMeshes.resize(m_tilesetTextures.size());
+    for (int ti = 0; ti < (int)m_tilesetTextures.size(); ++ti) {
+        if (!used[ti]) continue;
+        auto& slot = m_tilesetTextures[ti];
+        glm::vec2 tsize = slot.texture->size();
+        int tcols = slot.columns > 0 ? slot.columns : (int)(tsize.x / m_tileSize);
+        float invTexW = 1.0f / tsize.x;
+        float invTexH = 1.0f / tsize.y;
+
+        std::vector<QuadVertex> verts;
+        std::vector<uint16_t> idxs;
+        verts.reserve(groundTiles.size() * 4 / usedCount);
+        idxs.reserve(groundTiles.size() * 6 / usedCount);
+
+        for (int i = 0; i < (int)groundTiles.size(); ++i) {
+            int gid = groundTiles[i];
+            if (gid < 0) continue;
+            if (!(gid >= slot.firstGid && gid < slot.firstGid + slot.tileCount)) continue;
+
+            int tx = i % m_width;
+            int ty = i / m_width;
+            float wx = tx * ts - hw;
+            float wz = ty * ts - hh;
+
+            int localIdx = gid - slot.firstGid;
+            int col = localIdx % tcols;
+            int row = localIdx / tcols;
+            float u0 = (float)col * m_tileSize * invTexW;
+            float v0 = (float)row * m_tileSize * invTexH;
+            float u1 = (float)(col + 1) * m_tileSize * invTexW;
+            float v1 = (float)(row + 1) * m_tileSize * invTexH;
+
+            uint32_t base = (uint32_t)verts.size();
+            verts.push_back({{wx,      0.0f, wz     }, {u0, v0}});
+            verts.push_back({{wx + ts, 0.0f, wz     }, {u1, v0}});
+            verts.push_back({{wx + ts, 0.0f, wz + ts}, {u1, v1}});
+            verts.push_back({{wx,      0.0f, wz + ts}, {u0, v1}});
+            idxs.push_back(base + 0); idxs.push_back(base + 1); idxs.push_back(base + 2);
+            idxs.push_back(base + 2); idxs.push_back(base + 3); idxs.push_back(base + 0);
         }
 
-        uint32_t base = (uint32_t)verts.size();
-        verts.push_back({{wx,      0.0f, wz     }, {u0, v0}});
-        verts.push_back({{wx + ts, 0.0f, wz     }, {u1, v0}});
-        verts.push_back({{wx + ts, 0.0f, wz + ts}, {u1, v1}});
-        verts.push_back({{wx,      0.0f, wz + ts}, {u0, v1}});
-        idxs.push_back(base + 0); idxs.push_back(base + 1); idxs.push_back(base + 2);
-        idxs.push_back(base + 2); idxs.push_back(base + 3); idxs.push_back(base + 0);
+        if (verts.empty()) continue;
+
+        auto& mesh = m_tileFloorMeshes[ti];
+        VkDeviceSize vsize = verts.size() * sizeof(QuadVertex);
+        VkDeviceSize isize = idxs.size() * sizeof(uint16_t);
+        m_engine->createBuffer(vsize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            mesh.vertexBuffer, mesh.vertexBufferMemory);
+        void* data;
+        vkMapMemory(m_engine->device(), mesh.vertexBufferMemory, 0, vsize, 0, &data);
+        memcpy(data, verts.data(), vsize);
+        vkUnmapMemory(m_engine->device(), mesh.vertexBufferMemory);
+        m_engine->createBuffer(isize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            mesh.indexBuffer, mesh.indexBufferMemory);
+        vkMapMemory(m_engine->device(), mesh.indexBufferMemory, 0, isize, 0, &data);
+        memcpy(data, idxs.data(), isize);
+        vkUnmapMemory(m_engine->device(), mesh.indexBufferMemory);
+        mesh.indexCount = (uint32_t)idxs.size();
     }
-
-    if (verts.empty()) return;
-
-    VkDeviceSize vsize = verts.size() * sizeof(QuadVertex);
-    VkDeviceSize isize = idxs.size() * sizeof(uint16_t);
-    m_engine->createBuffer(vsize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        m_tileFloorMesh.vertexBuffer, m_tileFloorMesh.vertexBufferMemory);
-    void* data;
-    vkMapMemory(m_engine->device(), m_tileFloorMesh.vertexBufferMemory, 0, vsize, 0, &data);
-    memcpy(data, verts.data(), vsize);
-    vkUnmapMemory(m_engine->device(), m_tileFloorMesh.vertexBufferMemory);
-    m_engine->createBuffer(isize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        m_tileFloorMesh.indexBuffer, m_tileFloorMesh.indexBufferMemory);
-    vkMapMemory(m_engine->device(), m_tileFloorMesh.indexBufferMemory, 0, isize, 0, &data);
-    memcpy(data, idxs.data(), isize);
-    vkUnmapMemory(m_engine->device(), m_tileFloorMesh.indexBufferMemory);
-    m_tileFloorMesh.indexCount = (uint32_t)idxs.size();
     m_useTileMesh = true;
 }
 
@@ -1258,19 +1249,13 @@ void Map::buildDirtPath() {
 
 void Map::render() {
     // Tiled floor from actual tileset textures
-    if (m_useTileMesh && m_tileFloorMesh.indexCount > 0) {
-        // Find the first valid tileset texture
-        VkDescriptorSet ds = VK_NULL_HANDLE;
-        for (auto& slot : m_tilesetTextures) {
-            if (slot.texture) {
-                ds = slot.texture->descriptorSet();
-                break;
-            }
-        }
-        if (ds != VK_NULL_HANDLE) {
-            m_renderer->drawTilemap(ds,
-                m_tileFloorMesh.vertexBuffer, m_tileFloorMesh.indexBuffer,
-                m_tileFloorMesh.indexCount);
+    if (m_useTileMesh) {
+        for (int ti = 0; ti < (int)m_tilesetTextures.size(); ++ti) {
+            auto& mesh = m_tileFloorMeshes[ti];
+            auto& slot = m_tilesetTextures[ti];
+            if (mesh.indexCount > 0 && slot.texture)
+                m_renderer->drawTilemap(slot.texture->descriptorSet(),
+                    mesh.vertexBuffer, mesh.indexBuffer, mesh.indexCount);
         }
     } else {
         if (m_floorTopMesh.indexCount > 0 && m_floorTexture) {

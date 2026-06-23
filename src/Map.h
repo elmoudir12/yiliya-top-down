@@ -123,7 +123,7 @@ private:
         int columns = 0;
     };
     std::vector<TilesetSlot> m_tilesetTextures;
-    LayerMesh m_tileFloorMesh;
+    std::vector<LayerMesh> m_tileFloorMeshes;
     bool m_useTileMesh = false;
 
     static constexpr float WALL_HEIGHT = 64.0f;
