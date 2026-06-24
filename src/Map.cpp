@@ -86,57 +86,9 @@ static Texture* createGrassTexture(Engine* engine) {
 }
 
 static Texture* createTreeTexture(Engine* engine) {
-    const int S = 64;
-    std::vector<uint8_t> p(S * S * 4, 0);
-    auto px = [&](int x, int y, uint8_t r, uint8_t g, uint8_t b, uint8_t a = 255) {
-        if (x < 0 || x >= S || y < 0 || y >= S) return;
-        int i = (y * S + x) * 4;
-        p[i+0] = r; p[i+1] = g; p[i+2] = b; p[i+3] = a;
-    };
-    // Trunk (brown)
-    for (int xx = 28; xx <= 35; ++xx)
-        for (int yy = 40; yy <= 55; ++yy)
-            px(xx, yy, 90, 55, 25);
-    // Canopy layers (triangular, top-to-bottom)
-    // Layer 1 (top)
-    for (int yy = 4; yy < 20; ++yy) {
-        int halfW = (yy - 4) / 2;
-        for (int xx = 32 - halfW; xx <= 32 + halfW; ++xx)
-            px(xx, yy, 60, 130, 50);
-    }
-    // Layer 2
-    for (int yy = 16; yy < 32; ++yy) {
-        int halfW = 4 + (yy - 16) / 2;
-        for (int xx = 32 - halfW; xx <= 32 + halfW; ++xx)
-            px(xx, yy, 55, 120, 45);
-    }
-    // Layer 2 highlight
-    for (int yy = 16; yy < 28; ++yy) {
-        int halfW = 3 + (yy - 16) / 3;
-        for (int xx = 32 - halfW; xx <= 32 + halfW; ++xx)
-            px(xx, yy, 80, 155, 65);
-    }
-    // Layer 3
-    for (int yy = 28; yy < 44; ++yy) {
-        int halfW = 8 + (yy - 28) / 2;
-        for (int xx = 32 - halfW; xx <= 32 + halfW; ++xx)
-            px(xx, yy, 50, 110, 40);
-    }
-    // Layer 3 highlight
-    for (int yy = 28; yy < 40; ++yy) {
-        int halfW = 6 + (yy - 28) / 3;
-        for (int xx = 32 - halfW; xx <= 32 + halfW; ++xx)
-            px(xx, yy, 70, 145, 60);
-    }
-    // Shadow on right side
-    for (int y = 0; y < 44; ++y)
-        for (int x = 34; x < S; ++x)
-            if (p[(y * S + x) * 4 + 3] > 0) {
-                p[(y * S + x) * 4 + 0] = p[(y * S + x) * 4 + 0] * 2 / 3;
-                p[(y * S + x) * 4 + 1] = p[(y * S + x) * 4 + 1] * 2 / 3;
-                p[(y * S + x) * 4 + 2] = p[(y * S + x) * 4 + 2] * 2 / 3;
-            }
-    return new Texture(engine, p.data(), S, S);
+    Texture* tex = new Texture(engine, "assets/pine trees.png");
+    tex->setFilter(VK_FILTER_NEAREST, VK_FILTER_NEAREST);
+    return tex;
 }
 
 static Texture* createTimberTexture(Engine* engine) {
@@ -1354,15 +1306,18 @@ void Map::render() {
     // Billboarded trees
     if (!m_trees.empty() && m_treeTexture) {
         glm::vec3 camPos = m_engine->cameraPosition();
+        glm::vec2 texSize = m_treeTexture->size();
+        float aspect = texSize.x / texSize.y;
         for (auto& tree : m_trees) {
             glm::vec3 fwd = glm::normalize(camPos - glm::vec3(tree.x, 0, tree.z));
             float angle = atan2f(fwd.x, fwd.z);
-            float s = tree.scale * 128.0f;
-            float trunkBotV = 55.0f / 64.0f;
-            float yOff = (trunkBotV - 0.5f) * s;
+            float s = tree.scale * 256.0f;
+            glm::vec4 vb = m_treeTexture->visibleBounds();
+            float drawH = s / aspect;
+            float yOff = (vb.w / texSize.y) * drawH - drawH * 0.5f;
             glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(tree.x, yOff, tree.z));
             model = glm::rotate(model, angle, glm::vec3(0, 1, 0));
-            model = glm::scale(model, glm::vec3(s, -s, 1));
+            model = glm::scale(model, glm::vec3(s, -drawH, 1));
             m_renderer->drawSprite3D(m_treeTexture->descriptorSet(), model);
         }
     }
