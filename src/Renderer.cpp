@@ -254,7 +254,7 @@ void Renderer::drawSprite(VkDescriptorSet descriptorSet, const glm::vec2& positi
     SpritePushConstants push{};
     push.model = model;
     vkCmdPushConstants(m_currentCommandBuffer, m_engine->pipelineLayout(),
-        VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(SpritePushConstants), &push);
+        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(SpritePushConstants), &push);
 
     vkCmdBindDescriptorSets(m_currentCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
         m_engine->pipelineLayout(), 1, 1, &descriptorSet, 0, nullptr);
@@ -262,11 +262,12 @@ void Renderer::drawSprite(VkDescriptorSet descriptorSet, const glm::vec2& positi
     vkCmdDrawIndexed(m_currentCommandBuffer, static_cast<uint32_t>(quadIndices.size()), 1, 0, 0, 0);
 }
 
-void Renderer::drawSprite3D(VkDescriptorSet descriptorSet, const glm::mat4& model) {
+void Renderer::drawSprite3D(VkDescriptorSet descriptorSet, const glm::mat4& model, const glm::vec4& color) {
     SpritePushConstants push{};
     push.model = model;
+    push.color = color;
     vkCmdPushConstants(m_currentCommandBuffer, m_engine->pipelineLayout(),
-        VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(SpritePushConstants), &push);
+        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(SpritePushConstants), &push);
 
     vkCmdBindDescriptorSets(m_currentCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
         m_engine->pipelineLayout(), 1, 1, &descriptorSet, 0, nullptr);
@@ -279,7 +280,7 @@ void Renderer::drawTilemap(VkDescriptorSet descriptorSet, VkBuffer vertexBuffer,
     SpritePushConstants push{};
     push.model = model;
     vkCmdPushConstants(m_currentCommandBuffer, m_engine->pipelineLayout(),
-        VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(SpritePushConstants), &push);
+        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(SpritePushConstants), &push);
 
     vkCmdBindDescriptorSets(m_currentCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
         m_engine->pipelineLayout(), 1, 1, &descriptorSet, 0, nullptr);

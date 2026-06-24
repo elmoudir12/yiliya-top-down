@@ -163,6 +163,8 @@ private:
     bool m_showMenu = true;
     int m_menuSelection = 0;
     float m_menuScrollAccum = 0.0f;
+    float m_menuAnimTimer = 0.0f;
+    bool m_menuInputEnabled = false;
     static constexpr int MENU_OPTION_COUNT = 2;
     Texture* m_menuTitleTexture = nullptr;
     Texture* m_menuOptionTextures[MENU_OPTION_COUNT] = { nullptr, nullptr };
@@ -170,6 +172,7 @@ private:
     Texture* m_menuBorderTexture = nullptr;
     Texture* m_menuPanelTexture = nullptr;
     Texture* m_menuSubtitleTexture = nullptr;
+    Texture* m_menuBlackOverlay = nullptr;
     void loadMenuTextures();
     void destroyMenuTextures();
     void handleMenuInput();

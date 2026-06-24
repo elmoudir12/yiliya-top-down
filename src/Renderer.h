@@ -36,6 +36,7 @@ struct QuadVertex {
 
 struct SpritePushConstants {
     glm::mat4 model;
+    glm::vec4 color = glm::vec4(1.0f);
 };
 
 struct DebugPushConstants {
@@ -50,7 +51,7 @@ public:
 
     bool beginFrame();
     void drawSprite(VkDescriptorSet descriptorSet, const glm::vec2& position, const glm::vec2& scale, float rotation = 0.0f);
-    void drawSprite3D(VkDescriptorSet descriptorSet, const glm::mat4& model);
+    void drawSprite3D(VkDescriptorSet descriptorSet, const glm::mat4& model, const glm::vec4& color = glm::vec4(1.0f));
     void drawTilemap(VkDescriptorSet descriptorSet, VkBuffer vertexBuffer, VkBuffer indexBuffer, uint32_t indexCount);
     void drawDebugRect(const glm::vec3& position, const glm::vec2& scale, const glm::vec4& color);
     void drawDebugBox(const glm::vec3& min, const glm::vec3& max, const glm::vec4& color);

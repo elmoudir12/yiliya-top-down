@@ -894,7 +894,7 @@ void Engine::createGraphicsPipeline() {
     std::array<VkDescriptorSetLayout, 2> setLayouts = { m_descriptorSetLayout, m_renderer->textureDescriptorLayout() };
 
     VkPushConstantRange pushConstantRange{};
-    pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
     pushConstantRange.offset = 0;
     pushConstantRange.size = sizeof(SpritePushConstants);
 
@@ -1442,6 +1442,15 @@ std::vector<char> readFile(const std::string& filename) {
 void Engine::loadMenuTextures() {
     if (!Font::load("fonts/alagard.ttf")) return;
 
+    // ---- Black overlay for fade-in animation ----
+    {
+        const uint8_t black[4] = { 0, 0, 0, 255 };
+        m_menuBlackOverlay = new Texture(this, black, 1, 1);
+    }
+
+    m_menuAnimTimer = 0.0f;
+    m_menuInputEnabled = false;
+
     // ---- Title ----
     {
         const char* title = "BEHEST";
@@ -1515,12 +1524,14 @@ void Engine::destroyMenuTextures() {
     if (m_menuTitleTexture) { delete m_menuTitleTexture; m_menuTitleTexture = nullptr; }
     if (m_menuSubtitleTexture) { delete m_menuSubtitleTexture; m_menuSubtitleTexture = nullptr; }
     if (m_menuCursorTexture) { delete m_menuCursorTexture; m_menuCursorTexture = nullptr; }
+    if (m_menuBlackOverlay) { delete m_menuBlackOverlay; m_menuBlackOverlay = nullptr; }
     for (int i = 0; i < MENU_OPTION_COUNT; ++i) {
         if (m_menuOptionTextures[i]) { delete m_menuOptionTextures[i]; m_menuOptionTextures[i] = nullptr; }
     }
 }
 
 void Engine::handleMenuInput() {
+    if (!m_menuInputEnabled) return;
     static bool prevUp = false, prevDown = false, prevEnter = false, prevSpace = false;
 
     bool up = glfwGetKey(m_window, GLFW_KEY_UP) == GLFW_PRESS || glfwGetKey(m_window, GLFW_KEY_W) == GLFW_PRESS;
@@ -1552,11 +1563,11 @@ void Engine::handleMenuInput() {
     VkExtent2D ext = m_swapChainExtent;
     const int optionSize = 28;
     const int optPad = 4;
-    const float targetOptionPx = std::min(ext.width * 0.18f, 240.0f);
+    const float targetOptionPx = std::min(ext.width * 0.12f, 140.0f);
     const float optionScale = targetOptionPx / Font::textWidth("NEW GAME", optionSize);
     float representativeOptionH = m_menuOptionTextures[0] ? m_menuOptionTextures[0]->size().y * optionScale : 36.0f;
     const float optionSpacing = representativeOptionH * 1.6f;
-    const float optionsStartY = (ext.height - optionSpacing * (MENU_OPTION_COUNT - 1)) * 0.5f;
+    const float optionsStartY = (ext.height - optionSpacing * (MENU_OPTION_COUNT - 1)) * 0.5f + 30.0f;
     const char* optionLabels[MENU_OPTION_COUNT] = { "NEW GAME", "QUIT" };
 
     for (int i = 0; i < MENU_OPTION_COUNT; ++i) {
@@ -1611,6 +1622,33 @@ void Engine::handleMenuInput() {
 }
 
 void Engine::renderMenu() {
+    // Update animation timer
+    m_menuAnimTimer += 1.0f / 60.0f;
+
+    // Animation phases (in seconds):
+    //   0.0 – 0.5 : black screen, nothing visible
+    //   0.5 – 1.5 : title fades in
+    //   1.5 – 2.5 : subtitle + options fade in
+    //   2.5+      : fully visible, enable input
+    float t = m_menuAnimTimer;
+    float titleAlpha = 0.0f;
+    float otherAlpha = 0.0f;
+    float overlayAlpha = 0.0f;
+
+    if (t < 0.5f) {
+        overlayAlpha = 1.0f;
+    } else if (t < 1.5f) {
+        titleAlpha = (t - 0.5f) / 1.0f;
+        overlayAlpha = 1.0f - titleAlpha;
+    } else if (t < 2.5f) {
+        titleAlpha = 1.0f;
+        otherAlpha = (t - 1.5f) / 1.0f;
+    } else {
+        titleAlpha = 1.0f;
+        otherAlpha = 1.0f;
+        if (!m_menuInputEnabled) m_menuInputEnabled = true;
+    }
+
     // Orthographic projection for menu
     VkExtent2D ext = m_swapChainExtent;
     float asp = (float)ext.width / (float)ext.height;
@@ -1628,71 +1666,73 @@ void Engine::renderMenu() {
                           1.0f - (cy / ext.height) * 2.0f);
     };
 
-    // Helper to draw a sprite with pixel top-left and pixel size.
-    // Uses drawSprite3D with a Y-flipped scale so the texture is right-side up.
-    auto drawPx = [&](Texture* tex, float px, float py, float pw, float ph) {
+    // Helper to draw a sprite with pixel top-left, pixel size, and alpha.
+    auto drawPx = [&](Texture* tex, float px, float py, float pw, float ph, float alpha = 1.0f) {
         if (!tex) return;
         glm::vec2 center = pxCenter(px + pw * 0.5f, py + ph * 0.5f);
         glm::vec2 size = pxSize(pw, ph);
         glm::mat4 model = glm::scale(
             glm::translate(glm::mat4(1.0f), glm::vec3(center, 0.0f)),
             glm::vec3(size.x, -size.y, 1.0f));
-        m_renderer->drawSprite3D(tex->descriptorSet(), model);
+        m_renderer->drawSprite3D(tex->descriptorSet(), model, glm::vec4(1.0f, 1.0f, 1.0f, alpha));
     };
 
+    // Full-screen black overlay during fade
+    if (overlayAlpha > 0.01f && m_menuBlackOverlay) {
+        drawPx(m_menuBlackOverlay, 0.0f, 0.0f, (float)ext.width, (float)ext.height, overlayAlpha);
+    }
+
     // Title at top center of screen
-    if (m_menuTitleTexture) {
+    if (m_menuTitleTexture && titleAlpha > 0.01f) {
         glm::vec2 ts = m_menuTitleTexture->size();
-        // Cap title width at 50% of screen or 600px, whichever is smaller
         float titleScale = std::min(ext.width * 0.50f, 600.0f) / ts.x;
         float drawPxW = ts.x * titleScale;
         float drawPxH = ts.y * titleScale;
         float tx = (ext.width - drawPxW) / 2.0f;
         float ty = ext.height * 0.18f;
-        drawPx(m_menuTitleTexture, tx, ty, drawPxW, drawPxH);
+        drawPx(m_menuTitleTexture, tx, ty, drawPxW, drawPxH, titleAlpha);
     }
 
-    // Subtitle below title
-    if (m_menuSubtitleTexture) {
+    // Subtitle at bottom
+    if (m_menuSubtitleTexture && otherAlpha > 0.01f) {
         glm::vec2 ss = m_menuSubtitleTexture->size();
         float subScale = std::min(ext.width * 0.20f, 300.0f) / ss.x;
         float drawPxW = ss.x * subScale;
         float drawPxH = ss.y * subScale;
         float sx = (ext.width - drawPxW) / 2.0f;
         float sy = ext.height - drawPxH - 16.0f;
-        drawPx(m_menuSubtitleTexture, sx, sy, drawPxW, drawPxH);
+        drawPx(m_menuSubtitleTexture, sx, sy, drawPxW, drawPxH, otherAlpha);
     }
 
     // Options centered vertically
-    const int optionSize = 28;
-    // Fixed pixel size for options (scaled to a comfortable size)
-    const float targetOptionPx = std::min(ext.width * 0.18f, 240.0f);
-    const float optionScale = targetOptionPx / Font::textWidth("NEW GAME", optionSize);
-    // Get a representative option height for spacing
-    float representativeOptionH = m_menuOptionTextures[0] ? m_menuOptionTextures[0]->size().y * optionScale : 36.0f;
-    const float optionSpacing = representativeOptionH * 1.6f;
-    const float optionsStartY = (ext.height - optionSpacing * (MENU_OPTION_COUNT - 1)) * 0.5f;
-    for (int i = 0; i < MENU_OPTION_COUNT; ++i) {
-        if (!m_menuOptionTextures[i]) continue;
-        glm::vec2 os = m_menuOptionTextures[i]->size();
-        bool selected = (i == m_menuSelection);
-        float scale = optionScale * (selected ? 1.15f : 1.0f);
-        float drawPxW = os.x * scale;
-        float drawPxH = os.y * scale;
-        float ox = (ext.width - drawPxW) / 2.0f;
-        float oy = optionsStartY + i * optionSpacing;
+    if (otherAlpha > 0.01f) {
+        const int optionSize = 28;
+        const float targetOptionPx = std::min(ext.width * 0.12f, 140.0f);
+        const float optionScale = targetOptionPx / Font::textWidth("NEW GAME", optionSize);
+        float representativeOptionH = m_menuOptionTextures[0] ? m_menuOptionTextures[0]->size().y * optionScale : 36.0f;
+        const float optionSpacing = representativeOptionH * 1.6f;
+        const float optionsStartY = (ext.height - optionSpacing * (MENU_OPTION_COUNT - 1)) * 0.5f + 30.0f;
+        for (int i = 0; i < MENU_OPTION_COUNT; ++i) {
+            if (!m_menuOptionTextures[i]) continue;
+            glm::vec2 os = m_menuOptionTextures[i]->size();
+            bool selected = (i == m_menuSelection);
+            float scale = optionScale * (selected ? 1.15f : 1.0f);
+            float drawPxW = os.x * scale;
+            float drawPxH = os.y * scale;
+            float ox = (ext.width - drawPxW) / 2.0f;
+            float oy = optionsStartY + i * optionSpacing;
 
-        drawPx(m_menuOptionTextures[i], ox, oy, drawPxW, drawPxH);
+            drawPx(m_menuOptionTextures[i], ox, oy, drawPxW, drawPxH, otherAlpha);
 
-        // Cursor to the left of selected option
-        if (selected && m_menuCursorTexture) {
-            glm::vec2 cs = m_menuCursorTexture->size();
-            float curScale = drawPxH * 0.55f / cs.y;
-            float curPxW = cs.x * curScale;
-            float curPxH = cs.y * curScale;
-            float curX = ox - curPxW - 16.0f;
-            float curY = oy + (drawPxH - curPxH) / 2.0f;
-            drawPx(m_menuCursorTexture, curX, curY, curPxW, curPxH);
+            if (selected && m_menuCursorTexture) {
+                glm::vec2 cs = m_menuCursorTexture->size();
+                float curScale = drawPxH * 0.55f / cs.y;
+                float curPxW = cs.x * curScale;
+                float curPxH = cs.y * curScale;
+                float curX = ox - curPxW - 16.0f;
+                float curY = oy + (drawPxH - curPxH) / 2.0f;
+                drawPx(m_menuCursorTexture, curX, curY, curPxW, curPxH, otherAlpha);
+            }
         }
     }
 }
