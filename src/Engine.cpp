@@ -1459,6 +1459,21 @@ void Engine::loadMenuTextures() {
         m_menuTitleTexture->setFilter(VK_FILTER_LINEAR, VK_FILTER_LINEAR);
     }
 
+    // ---- Subtitle / copyright ----
+    {
+        const char* sub = "(C) 1992 PIRYL SOFT";
+        int subSize = 12;
+        int subPad = 4;
+        int tw = Font::textWidth(sub, subSize) + subPad * 2;
+        int th = Font::textHeight(subSize) + subPad * 2;
+        int baseline = subPad + Font::ascent(subSize);
+        std::vector<uint8_t> pixels(tw * th * 4, 0);
+        Font::renderText(pixels.data(), tw, th, sub, subPad + 2, baseline + 2, subSize, 20, 16, 10, 3);
+        Font::renderText(pixels.data(), tw, th, sub, subPad, baseline, subSize, 160, 150, 130, 3);
+        m_menuSubtitleTexture = new Texture(this, pixels.data(), tw, th);
+        m_menuSubtitleTexture->setFilter(VK_FILTER_LINEAR, VK_FILTER_LINEAR);
+    }
+
     // ---- Options ----
     const char* options[MENU_OPTION_COUNT] = { "NEW GAME", "QUIT" };
     int optionSize = 28;
@@ -1533,25 +1548,32 @@ void Engine::handleMenuInput() {
     m_menuScrollAccum *= 0.5f;
     if (std::abs(m_menuScrollAccum) < 0.01f) m_menuScrollAccum = 0.0f;
 
-    // --- Mouse hover over options ---
+    // --- Mouse hover over options (text-only hit region) ---
     VkExtent2D ext = m_swapChainExtent;
     const int optionSize = 28;
+    const int optPad = 4;
     const float targetOptionPx = std::min(ext.width * 0.18f, 240.0f);
     const float optionScale = targetOptionPx / Font::textWidth("NEW GAME", optionSize);
     float representativeOptionH = m_menuOptionTextures[0] ? m_menuOptionTextures[0]->size().y * optionScale : 36.0f;
     const float optionSpacing = representativeOptionH * 1.6f;
     const float optionsStartY = (ext.height - optionSpacing * (MENU_OPTION_COUNT - 1)) * 0.5f;
+    const char* optionLabels[MENU_OPTION_COUNT] = { "NEW GAME", "QUIT" };
 
     for (int i = 0; i < MENU_OPTION_COUNT; ++i) {
         if (!m_menuOptionTextures[i]) continue;
         glm::vec2 os = m_menuOptionTextures[i]->size();
         float drawPxW = os.x * optionScale;
-        float drawPxH = os.y * optionScale;
         float ox = (ext.width - drawPxW) / 2.0f;
         float oy = optionsStartY + i * optionSpacing;
 
-        if (m_lastMouseX >= ox && m_lastMouseX <= ox + drawPxW &&
-            m_lastMouseY >= oy && m_lastMouseY <= oy + drawPxH) {
+        // Use text-only bounds (skip the 4px texture padding)
+        float textW = Font::textWidth(optionLabels[i], optionSize) * optionScale;
+        float textH = Font::textHeight(optionSize) * optionScale;
+        float tx = ox + optPad * optionScale;
+        float ty = oy + optPad * optionScale;
+
+        if (m_lastMouseX >= tx && m_lastMouseX <= tx + textW &&
+            m_lastMouseY >= ty && m_lastMouseY <= ty + textH) {
             m_menuSelection = i;
         }
     }
@@ -1628,6 +1650,17 @@ void Engine::renderMenu() {
         float tx = (ext.width - drawPxW) / 2.0f;
         float ty = ext.height * 0.18f;
         drawPx(m_menuTitleTexture, tx, ty, drawPxW, drawPxH);
+    }
+
+    // Subtitle below title
+    if (m_menuSubtitleTexture) {
+        glm::vec2 ss = m_menuSubtitleTexture->size();
+        float subScale = std::min(ext.width * 0.20f, 300.0f) / ss.x;
+        float drawPxW = ss.x * subScale;
+        float drawPxH = ss.y * subScale;
+        float sx = (ext.width - drawPxW) / 2.0f;
+        float sy = ext.height - drawPxH - 16.0f;
+        drawPx(m_menuSubtitleTexture, sx, sy, drawPxW, drawPxH);
     }
 
     // Options centered vertically
