@@ -165,6 +165,9 @@ private:
     float m_menuScrollAccum = 0.0f;
     float m_menuAnimTimer = 0.0f;
     bool m_menuInputEnabled = false;
+    bool m_menuTransitionActive = false;
+    float m_menuTransitionAlpha = 0.0f;
+    float m_menuTransitionSpeed = 0.8f;
     static constexpr int MENU_OPTION_COUNT = 2;
     Texture* m_menuTitleTexture = nullptr;
     Texture* m_menuOptionTextures[MENU_OPTION_COUNT] = { nullptr, nullptr };

@@ -380,6 +380,26 @@ void Engine::mainLoop() {
             }
             m_mapManager->update(deltaTime);
         }
+        // Menu-to-game fade transition
+        if (m_menuTransitionActive) {
+            if (m_showMenu) {
+                // Phase 1: fade out from menu
+                m_menuTransitionAlpha += deltaTime * (1.0f / m_menuTransitionSpeed);
+                if (m_menuTransitionAlpha >= 1.0f) {
+                    m_menuTransitionAlpha = 1.0f;
+                    m_showMenu = false;
+                    m_mapManager->loadMap("player_house");
+                }
+            } else {
+                // Phase 2: fade in to game
+                m_menuTransitionAlpha -= deltaTime * (1.0f / m_menuTransitionSpeed);
+                if (m_menuTransitionAlpha <= 0.0f) {
+                    m_menuTransitionAlpha = 0.0f;
+                    m_menuTransitionActive = false;
+                }
+            }
+        }
+
         currentMap = m_mapManager->currentMap();
 
         if (!m_showMenu) {
@@ -502,6 +522,21 @@ void Engine::mainLoop() {
                 m_renderer->drawDebugBox(pos, pos + glm::vec3(1, 24, 1), glm::vec4(0, 1, 0, 1));
                 m_renderer->drawDebugBox(pos, pos + glm::vec3(1, 1, 24), glm::vec4(0, 0, 1, 1));
                 (void)name;
+            }
+
+            // Menu-to-game transition overlay (drawn on top of everything)
+            if (m_menuTransitionActive && m_menuTransitionAlpha > 0.01f && m_menuBlackOverlay) {
+                VkExtent2D ext = m_swapChainExtent;
+                float asp = (float)ext.width / (float)ext.height;
+                glm::mat4 proj = glm::ortho(-asp, asp, -1.0f, 1.0f, -1.0f, 1.0f);
+                proj[1][1] *= -1.0f;
+                m_projMatrix = proj;
+                m_viewMatrix = glm::mat4(1.0f);
+                glm::mat4 model = glm::scale(
+                    glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 0.0f)),
+                    glm::vec3(asp * 2.0f, 2.0f, 1.0f));
+                m_renderer->drawSprite3D(m_menuBlackOverlay->descriptorSet(), model,
+                    glm::vec4(1.0f, 1.0f, 1.0f, m_menuTransitionAlpha));
             }
 
             m_renderer->endFrame();
@@ -1589,29 +1624,27 @@ void Engine::handleMenuInput() {
         }
     }
 
+    auto startNewGame = [&]() {
+        if (!m_menuTransitionActive) {
+            m_menuTransitionActive = true;
+            m_menuTransitionAlpha = 0.0f;
+            m_menuInputEnabled = false;
+        }
+    };
+
     // --- Mouse click ---
     if (m_menuClickPending) {
         m_menuClickPending = false;
         switch (m_menuSelection) {
-            case 0:
-                m_showMenu = false;
-                m_mapManager->loadMap("player_house");
-                break;
-            case 1:
-                glfwSetWindowShouldClose(m_window, GLFW_TRUE);
-                break;
+            case 0: startNewGame(); break;
+            case 1: glfwSetWindowShouldClose(m_window, GLFW_TRUE); break;
         }
     }
 
     if ((enter && !prevEnter) || (space && !prevSpace)) {
         switch (m_menuSelection) {
-            case 0:
-                m_showMenu = false;
-                m_mapManager->loadMap("player_house");
-                break;
-            case 1:
-                glfwSetWindowShouldClose(m_window, GLFW_TRUE);
-                break;
+            case 0: startNewGame(); break;
+            case 1: glfwSetWindowShouldClose(m_window, GLFW_TRUE); break;
         }
     }
 
