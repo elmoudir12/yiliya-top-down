@@ -350,6 +350,21 @@ void Renderer::drawDebugBox(const glm::vec3& min, const glm::vec3& max, const gl
     vkCmdDraw(m_currentCommandBuffer, static_cast<uint32_t>(boxLineVerts.size()), 1, 0, 0);
 }
 
+void Renderer::setScissor(int x, int y, int w, int h) {
+    VkRect2D scissor{};
+    scissor.offset = { x, y };
+    scissor.extent = { (uint32_t)w, (uint32_t)h };
+    vkCmdSetScissor(m_currentCommandBuffer, 0, 1, &scissor);
+}
+
+void Renderer::resetScissor() {
+    VkExtent2D extent = m_engine->swapChainExtent();
+    VkRect2D scissor{};
+    scissor.offset = { 0, 0 };
+    scissor.extent = extent;
+    vkCmdSetScissor(m_currentCommandBuffer, 0, 1, &scissor);
+}
+
 void Renderer::endFrame() {
     vkCmdEndRenderPass(m_currentCommandBuffer);
 

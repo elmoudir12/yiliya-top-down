@@ -79,7 +79,7 @@ void Engine::initWindow() {
             double dy = y - engine->m_lastMouseY;
             engine->m_camYaw -= static_cast<float>(dx * 0.3);
             engine->m_camPitch += static_cast<float>(dy * 0.3);
-            engine->m_camPitch = std::clamp(engine->m_camPitch, -89.0f, 89.0f);
+            engine->m_camPitch = std::clamp(engine->m_camPitch, -10.0f, 45.0f);
         }
         engine->m_lastMouseX = x;
         engine->m_lastMouseY = y;
@@ -112,8 +112,8 @@ void Engine::initWindow() {
             // While menu is open, scroll changes selection
             engine->m_menuScrollAccum += static_cast<float>(y);
         } else {
-            engine->m_camDistance -= static_cast<float>(y * 20.0f);
-            engine->m_camDistance = std::clamp(engine->m_camDistance, 100.0f, 1500.0f);
+            engine->m_camDistance -= static_cast<float>(y * 15.0f);
+            engine->m_camDistance = std::clamp(engine->m_camDistance, 90.0f, 420.0f);
         }
     });
 }
@@ -138,10 +138,10 @@ void Engine::initVulkan() {
 
     m_player = new Player(this, m_renderer);
     m_mapManager = new MapManager(this, m_renderer, m_player);
-    m_mapManager->loadMap("player_house");
+    m_mapManager->loadMap("front_yard");
 
     m_npc = new Npc(this, m_renderer, "assets/nort");
-    m_npc->setPosition(glm::vec3(-110.0f, 0.0f, -140.0f)); // near the bed in player_house
+    // NPC spawn is placed by MapManager::loadMap next to player spawn
 
     // Player dot texture for map overlay
     {
@@ -186,6 +186,7 @@ void Engine::initVulkan() {
     }
 
     loadMenuTextures();
+    loadIntroTextures();
 }
 
 void Engine::renderCollisionDebug(Map* map, Player* player) {
@@ -347,17 +348,43 @@ void Engine::updateCamera() {
 
     // glm::perspective produces OpenGL NDC (Y-up), but Vulkan NDC is Y-down
     // Flip Y in clip space to correct the orientation
-    glm::mat4 proj = glm::perspective(glm::radians(45.0f), aspect, 1.0f, 3000.0f);
+    glm::mat4 proj = glm::perspective(glm::radians(55.0f), aspect, 1.0f, 6000.0f);
     proj[1][1] *= -1.0f;
     m_projMatrix = proj;
 
-    float yawRad = glm::radians(m_camYaw);
-    float pitchRad = glm::radians(m_camPitch);
-    m_camEye = m_camTarget + glm::vec3(
-        m_camDistance * std::cos(pitchRad) * std::sin(yawRad),
-        m_camDistance * std::sin(pitchRad),
-        m_camDistance * std::cos(pitchRad) * std::cos(yawRad)
-    );
+    // Over-shoulder third person: lock behind + above + right of player,
+    // look past them forward. Mouse drag orbits yaw/pitch, scroll zooms.
+    if (m_player) {
+        glm::vec3 p = m_player->position();
+        float yawRad = glm::radians(m_camYaw);
+        float pitchRad = glm::radians(m_camPitch);
+        glm::vec3 fwd(-std::sin(yawRad), 0.0f, -std::cos(yawRad));
+        glm::vec3 right(std::cos(yawRad), 0.0f, -std::sin(yawRad));
+
+        float dist = m_camDistance;
+        float cosP = std::cos(pitchRad);
+        float sinP = std::sin(pitchRad);
+
+        m_camEye = p
+            - fwd * (dist * cosP)
+            + glm::vec3(0.0f, m_camEyeHeight + dist * sinP, 0.0f)
+            + right * m_camShoulder;
+
+        // Aim point: above player's head, pushed forward so the
+        // player sits left-of-center, over-the-shoulder style
+        m_camTarget = p
+            + glm::vec3(0.0f, 85.0f, 0.0f)
+            + fwd * 160.0f
+            + right * (m_camShoulder * 0.55f);
+    } else {
+        float yawRad = glm::radians(m_camYaw);
+        float pitchRad = glm::radians(m_camPitch);
+        m_camEye = m_camTarget + glm::vec3(
+            m_camDistance * std::cos(pitchRad) * std::sin(yawRad),
+            m_camDistance * std::sin(pitchRad),
+            m_camDistance * std::cos(pitchRad) * std::cos(yawRad)
+        );
+    }
     m_viewMatrix = glm::lookAt(m_camEye, m_camTarget, glm::vec3(0.0f, 1.0f, 0.0f));
 }
 
@@ -373,7 +400,7 @@ void Engine::mainLoop() {
 
         if (m_showMenu) {
             handleMenuInput();
-        } else if (!m_showMap) {
+        } else if (!m_introActive && !m_showMap) {
             if (!m_mapManager->isTransitioning() && currentMap) {
                 m_player->update(deltaTime, currentMap);
                 if (m_npc) m_npc->update(deltaTime, currentMap, m_player->position());
@@ -388,8 +415,54 @@ void Engine::mainLoop() {
                 if (m_menuTransitionAlpha >= 1.0f) {
                     m_menuTransitionAlpha = 1.0f;
                     m_showMenu = false;
-                    m_mapManager->loadMap("player_house");
+                    m_introActive = true;
+                    m_introLine = 0;
+                    m_introRevealCount = 0;
+                    m_introCharAccum = 0.0f;
+                    m_introLineComplete = false;
+                    m_introIndicatorTimer = 0.0f;
+                    m_introPrevInput = false;
+                    m_introTotalChars = m_introLineCharCount[0];
                 }
+            } else if (m_introActive) {
+                // Typewriter character reveal
+                if (!m_introLineComplete) {
+                    m_introCharAccum += deltaTime;
+                    while (m_introCharAccum >= INTRO_CHAR_DELAY && m_introRevealCount < m_introTotalChars) {
+                        m_introRevealCount++;
+                        m_introCharAccum -= INTRO_CHAR_DELAY;
+                    }
+                    if (m_introRevealCount >= m_introTotalChars) {
+                        m_introLineComplete = true;
+                    }
+                }
+                // Input to advance dialogue
+                bool advance = glfwGetKey(m_window, GLFW_KEY_ENTER) == GLFW_PRESS ||
+                               glfwGetKey(m_window, GLFW_KEY_SPACE) == GLFW_PRESS ||
+                               glfwGetKey(m_window, GLFW_KEY_Z) == GLFW_PRESS ||
+                               glfwGetKey(m_window, GLFW_KEY_X) == GLFW_PRESS;
+                bool click = glfwGetMouseButton(m_window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
+                advance = advance || click;
+                if (advance && !m_introPrevInput) {
+                    if (!m_introLineComplete) {
+                        // Skip to end of current line
+                        m_introRevealCount = m_introTotalChars;
+                        m_introLineComplete = true;
+                    } else {
+                        // Advance to next line
+                        m_introLine++;
+                        if (m_introLine < INTRO_LINE_COUNT) {
+                            m_introRevealCount = 0;
+                            m_introCharAccum = 0.0f;
+                            m_introLineComplete = false;
+                            m_introTotalChars = m_introLineCharCount[m_introLine];
+                        } else {
+                            m_introActive = false;
+                            m_mapManager->loadMap("front_yard");
+                        }
+                    }
+                }
+                m_introPrevInput = advance;
             } else {
                 // Phase 2: fade in to game
                 m_menuTransitionAlpha -= deltaTime * (1.0f / m_menuTransitionSpeed);
@@ -402,7 +475,7 @@ void Engine::mainLoop() {
 
         currentMap = m_mapManager->currentMap();
 
-        if (!m_showMenu) {
+        if (!m_showMenu && !m_introActive) {
             updateCamera();
         }
 
@@ -497,6 +570,8 @@ void Engine::mainLoop() {
         if (m_renderer->beginFrame()) {
             if (m_showMenu) {
                 renderMenu();
+            } else if (m_introActive) {
+                // Nothing rendered here - black screen with text drawn later
             } else if (currentMap) {
                 if (m_showMap) {
                     renderMapOverlay(currentMap, m_player);
@@ -537,6 +612,9 @@ void Engine::mainLoop() {
                     glm::vec3(asp * 2.0f, 2.0f, 1.0f));
                 m_renderer->drawSprite3D(m_menuBlackOverlay->descriptorSet(), model,
                     glm::vec4(1.0f, 1.0f, 1.0f, m_menuTransitionAlpha));
+                if (m_introActive) {
+                    renderIntro();
+                }
             }
 
             m_renderer->endFrame();
@@ -549,6 +627,7 @@ void Engine::mainLoop() {
 }
 
 void Engine::cleanup() {
+    destroyIntroTextures();
     destroyMenuTextures();
     Font::shutdown();
     delete m_mapManager;
@@ -1562,6 +1641,125 @@ void Engine::destroyMenuTextures() {
     if (m_menuBlackOverlay) { delete m_menuBlackOverlay; m_menuBlackOverlay = nullptr; }
     for (int i = 0; i < MENU_OPTION_COUNT; ++i) {
         if (m_menuOptionTextures[i]) { delete m_menuOptionTextures[i]; m_menuOptionTextures[i] = nullptr; }
+    }
+}
+
+void Engine::loadIntroTextures() {
+    const char* speakers[INTRO_LINE_COUNT] = { "Yir", "Yir", "Yir", "Yir" };
+    const char* lines[INTRO_LINE_COUNT] = {
+        "Hey. Wake up.",
+        "Master's waiting. You know how he gets.",
+        "Come on... it's time.",
+        "Today's the day."
+    };
+    int spkSize = INTRO_SPEAKER_FONT_SIZE;
+    int lineSize = INTRO_LINE_FONT_SIZE;
+    int pad = 4;
+    for (int i = 0; i < INTRO_LINE_COUNT; ++i) {
+        m_introLineCharCount[i] = (int)strlen(lines[i]);
+        int spkW = Font::textWidth(speakers[i], spkSize) + pad * 2;
+        int spkH = Font::textHeight(spkSize) + pad * 2;
+        int spkBaseline = pad + Font::ascent(spkSize);
+        std::vector<uint8_t> spkPixels(spkW * spkH * 4, 0);
+        Font::renderText(spkPixels.data(), spkW, spkH, speakers[i], pad, spkBaseline, spkSize, 255, 200, 100, 3);
+        m_introSpeakerTextures[i] = new Texture(this, spkPixels.data(), spkW, spkH);
+        m_introSpeakerTextures[i]->setFilter(VK_FILTER_LINEAR, VK_FILTER_LINEAR);
+
+        int lineW = Font::textWidth(lines[i], lineSize) + pad * 2;
+        int lineH = Font::textHeight(lineSize) + pad * 2;
+        int lineBaseline = pad + Font::ascent(lineSize);
+        std::vector<uint8_t> linePixels(lineW * lineH * 4, 0);
+        Font::renderText(linePixels.data(), lineW, lineH, lines[i], pad, lineBaseline, lineSize, 240, 235, 225, 3);
+        m_introLineTextures[i] = new Texture(this, linePixels.data(), lineW, lineH);
+        m_introLineTextures[i]->setFilter(VK_FILTER_LINEAR, VK_FILTER_LINEAR);
+    }
+}
+
+void Engine::destroyIntroTextures() {
+    for (int i = 0; i < INTRO_LINE_COUNT; ++i) {
+        if (m_introSpeakerTextures[i]) { delete m_introSpeakerTextures[i]; m_introSpeakerTextures[i] = nullptr; }
+        if (m_introLineTextures[i]) { delete m_introLineTextures[i]; m_introLineTextures[i] = nullptr; }
+    }
+}
+
+void Engine::renderIntro() {
+    if (m_introLine < 0 || m_introLine >= INTRO_LINE_COUNT) return;
+    VkExtent2D ext = m_swapChainExtent;
+    float asp = (float)ext.width / (float)ext.height;
+    m_projMatrix = glm::ortho(-asp, asp, -1.0f, 1.0f, -1.0f, 1.0f);
+    m_projMatrix[1][1] *= -1.0f;
+    m_viewMatrix = glm::mat4(1.0f);
+    auto pxSize = [&](float pxW, float pxH) { return glm::vec2(pxW / ext.width * 2.0f * asp, pxH / ext.height * 2.0f); };
+    auto pxCenter = [&](float cx, float cy) { return glm::vec2((cx / ext.width) * 2.0f * asp - asp, 1.0f - (cy / ext.height) * 2.0f); };
+    auto drawPx = [&](Texture* tex, float px, float py, float pw, float ph, float a = 1.0f) {
+        if (!tex) return;
+        glm::vec2 c = pxCenter(px + pw * 0.5f, py + ph * 0.5f);
+        glm::vec2 s = pxSize(pw, ph);
+        glm::mat4 m = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(c, 0.0f)), glm::vec3(s.x, -s.y, 1.0f));
+        m_renderer->drawSprite3D(tex->descriptorSet(), m, glm::vec4(1.0f, 1.0f, 1.0f, a));
+    };
+
+    int idx = m_introLine;
+    int boxH = 120;
+    int boxY = ext.height - boxH - 24;
+    int pad = INTRO_BOX_PAD;
+
+    // Draw dialog box background
+    if (m_menuBlackOverlay) {
+        float boxAlpha = 0.85f;
+        drawPx(m_menuBlackOverlay, 40, boxY, ext.width - 80, boxH, boxAlpha);
+    }
+
+    // Draw speaker name at top-left of box
+    if (m_introSpeakerTextures[idx]) {
+        glm::vec2 ss = m_introSpeakerTextures[idx]->size();
+        float spkScale = 1.0f;
+        float spkPxW = ss.x * spkScale;
+        float spkPxH = ss.y * spkScale;
+        drawPx(m_introSpeakerTextures[idx], 40 + pad, boxY + 8, spkPxW, spkPxH, 1.0f);
+    }
+
+    // Draw dialogue text with typewriter scissor clip
+    if (m_introLineTextures[idx]) {
+        glm::vec2 ls = m_introLineTextures[idx]->size();
+        float lineScale = 1.0f;
+        float linePxW = ls.x * lineScale;
+        float linePxH = ls.y * lineScale;
+        float textX = 40 + pad;
+        float textY = boxY + 8 + (m_introSpeakerTextures[idx] ? m_introSpeakerTextures[idx]->size().y * 1.0f + 6 : 0);
+
+        // Calculate revealed width based on character count
+        int totalChars = m_introLineCharCount[idx];
+        float revealFraction = (totalChars > 0) ? (float)m_introRevealCount / (float)totalChars : 0.0f;
+        revealFraction = std::min(revealFraction, 1.0f);
+        float revealedPxW = linePxW * revealFraction;
+
+        // Set scissor to clip text to revealed portion
+        int scX = (int)(textX);
+        int scY = (int)(textY);
+        int scW = (int)(revealedPxW);
+        int scH = (int)(linePxH);
+        m_renderer->setScissor(scX, scY, scW, scH);
+
+        drawPx(m_introLineTextures[idx], textX, textY, linePxW, linePxH, 1.0f);
+
+        // Reset scissor
+        m_renderer->resetScissor();
+    }
+
+    // Draw blinking "next" indicator when line complete
+    if (m_introLineComplete && m_menuCursorTexture) {
+        m_introIndicatorTimer += 1.0f / 60.0f;
+        float blink = sinf(m_introIndicatorTimer * 4.0f) * 0.5f + 0.5f;
+        if (blink > 0.3f) {
+            glm::vec2 cs = m_menuCursorTexture->size();
+            float curScale = 0.8f;
+            float curPxW = cs.x * curScale;
+            float curPxH = cs.y * curScale;
+            float curX = ext.width - 40 - pad - curPxW - 8;
+            float curY = boxY + boxH - curPxH - 12;
+            drawPx(m_menuCursorTexture, curX, curY, curPxW, curPxH, blink);
+        }
     }
 }
 

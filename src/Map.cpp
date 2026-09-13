@@ -174,8 +174,7 @@ struct MapMeta {
 
 static const std::unordered_map<std::string, MapMeta>& getMapMeta() {
     static const std::unordered_map<std::string, MapMeta> meta = {
-        {"player_house", {14, 11, 0, 0, {{4, 11, 2, 1, "front_yard"}}}},
-        {"front_yard",   {27, 20, 0, 13, {{10, -1, 1, 1, "player_house"}}}},
+        {"front_yard",   {100, 100, 0, 0, {}}},
     };
     return meta;
 }
@@ -339,10 +338,11 @@ void Map::load(const std::string& mapName) {
         m_decorationTexture = new Texture(m_engine, "assets/front house of the player.png");
         float hw3 = m_width * m_tileSize * 0.5f;
         float hh3 = m_height * m_tileSize * 0.5f;
+        // Place house ~10 tiles north of map center so it's near spawn on huge maps
         m_decorationPos = glm::vec3(
-            10 * m_tileSize + m_tileSize * 0.5f - hw3,
+            m_width * m_tileSize * 0.5f + m_tileSize * 0.5f - hw3,
             0.0f,
-            2 * m_tileSize + m_tileSize * 0.5f - hh3 - 80.0f
+            (m_height * 0.5f - 10) * m_tileSize + m_tileSize * 0.5f - hh3 - 80.0f
         );
         m_decorationScale = 6.0f;
     }

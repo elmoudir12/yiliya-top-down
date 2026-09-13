@@ -55,6 +55,8 @@ public:
     void drawTilemap(VkDescriptorSet descriptorSet, VkBuffer vertexBuffer, VkBuffer indexBuffer, uint32_t indexCount);
     void drawDebugRect(const glm::vec3& position, const glm::vec2& scale, const glm::vec4& color);
     void drawDebugBox(const glm::vec3& min, const glm::vec3& max, const glm::vec4& color);
+    void setScissor(int x, int y, int w, int h);
+    void resetScissor();
     void endFrame();
     void setClearColor(float r, float g, float b);
 

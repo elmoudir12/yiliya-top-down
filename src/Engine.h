@@ -132,10 +132,12 @@ private:
     uint32_t m_currentFrame = 0;
     bool m_framebufferResized = false;
 
-    // 3D camera
+    // 3D camera — over-shoulder third person, locked to player
     float m_camYaw = 0.0f;
-    float m_camPitch = 25.0f;
-    float m_camDistance = 500.0f;
+    float m_camPitch = 12.0f;
+    float m_camDistance = 200.0f;
+    float m_camShoulder = 45.0f;   // lateral offset (right shoulder)
+    float m_camEyeHeight = 105.0f; // eye height above ground
     glm::vec3 m_camTarget{ 0.0f, 0.0f, 0.0f };
     glm::vec3 m_camEye{ 0.0f, 0.0f, 0.0f };
     glm::mat4 m_viewMatrix{ 1.0f };
@@ -180,6 +182,27 @@ private:
     void destroyMenuTextures();
     void handleMenuInput();
     void renderMenu();
+
+    // Intro dialogue state (Undertale-style click-to-advance)
+    bool m_introActive = false;
+    int m_introLine = -1;
+    int m_introTotalChars = 0;
+    int m_introRevealCount = 0;
+    float m_introCharAccum = 0.0f;
+    bool m_introLineComplete = false;
+    bool m_introPrevInput = false;
+    float m_introIndicatorTimer = 0.0f;
+    static constexpr int INTRO_LINE_COUNT = 4;
+    static constexpr int INTRO_SPEAKER_FONT_SIZE = 18;
+    static constexpr int INTRO_LINE_FONT_SIZE = 24;
+    static constexpr float INTRO_CHAR_DELAY = 0.045f;
+    static constexpr int INTRO_BOX_PAD = 16;
+    Texture* m_introSpeakerTextures[INTRO_LINE_COUNT] = { nullptr, nullptr, nullptr, nullptr };
+    Texture* m_introLineTextures[INTRO_LINE_COUNT] = { nullptr, nullptr, nullptr, nullptr };
+    int m_introLineCharCount[INTRO_LINE_COUNT];
+    void loadIntroTextures();
+    void destroyIntroTextures();
+    void renderIntro();
 
     Renderer* m_renderer = nullptr;
     Player* m_player = nullptr;
