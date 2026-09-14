@@ -174,7 +174,7 @@ struct MapMeta {
 
 static const std::unordered_map<std::string, MapMeta>& getMapMeta() {
     static const std::unordered_map<std::string, MapMeta> meta = {
-        {"front_yard",   {100, 100, 0, 0, {}}},
+        {"front_yard",   {200, 200, 0, 0, {}}},
     };
     return meta;
 }
@@ -570,7 +570,7 @@ void Map::buildFloorTop() {
         {{ hw, 0.0f,  hh}, {m_width,    m_height}},
         {{-hw, 0.0f,  hh}, {0.0f,       m_height}},
     };
-    uint16_t idxs[6] = {0, 1, 2, 2, 3, 0};
+    uint32_t idxs[6] = {0, 1, 2, 2, 3, 0};
     VkDeviceSize vsize = sizeof(verts);
     VkDeviceSize isize = sizeof(idxs);
     m_engine->createBuffer(vsize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
@@ -598,7 +598,7 @@ void Map::buildFloorBottom() {
         {{ hw, -1.0f,  hh}, {m_width,    m_height}},
         {{-hw, -1.0f,  hh}, {0.0f,       m_height}},
     };
-    uint16_t idxs[6] = {0, 1, 2, 2, 3, 0};
+    uint32_t idxs[6] = {0, 1, 2, 2, 3, 0};
     VkDeviceSize vsize = sizeof(verts);
     VkDeviceSize isize = sizeof(idxs);
     m_engine->createBuffer(vsize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
@@ -651,7 +651,7 @@ void Map::buildTiledFloor(const std::vector<int>& groundTiles) {
         float invTexH = 1.0f / tsize.y;
 
         std::vector<QuadVertex> verts;
-        std::vector<uint16_t> idxs;
+        std::vector<uint32_t> idxs;
         verts.reserve(groundTiles.size() * 4 / usedCount);
         idxs.reserve(groundTiles.size() * 6 / usedCount);
 
@@ -686,7 +686,7 @@ void Map::buildTiledFloor(const std::vector<int>& groundTiles) {
 
         auto& mesh = m_tileFloorMeshes[ti];
         VkDeviceSize vsize = verts.size() * sizeof(QuadVertex);
-        VkDeviceSize isize = idxs.size() * sizeof(uint16_t);
+        VkDeviceSize isize = idxs.size() * sizeof(uint32_t);
         m_engine->createBuffer(vsize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
             mesh.vertexBuffer, mesh.vertexBufferMemory);
@@ -712,7 +712,7 @@ void Map::buildWalls() {
     float t = WALL_THICK;
 
     std::vector<QuadVertex> verts;
-    std::vector<uint16_t> idxs;
+    std::vector<uint32_t> idxs;
 
     auto addWallQuad = [&](const glm::vec3& a, const glm::vec3& b,
                             const glm::vec3& c, const glm::vec3& d,
@@ -832,7 +832,7 @@ void Map::buildWalls() {
     if (m_wallMesh.indexCount == 0) return;
 
     VkDeviceSize vsize = sizeof(QuadVertex) * verts.size();
-    VkDeviceSize isize = sizeof(uint16_t) * idxs.size();
+    VkDeviceSize isize = sizeof(uint32_t) * idxs.size();
 
     m_engine->createBuffer(vsize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
@@ -1223,7 +1223,7 @@ void Map::buildDirtPath() {
                          (spine[i+1].z - spine[i].z) * (spine[i+1].z - spine[i].z));
 
     std::vector<QuadVertex> verts;
-    std::vector<uint16_t> idxs;
+    std::vector<uint32_t> idxs;
     float acc = 0.0f;
 
     for (size_t i = 0; i+1 < n; ++i) {
@@ -1250,7 +1250,7 @@ void Map::buildDirtPath() {
 
     m_dirtPathMesh.indexCount = (uint32_t)idxs.size();
     VkDeviceSize vsize = sizeof(QuadVertex) * verts.size();
-    VkDeviceSize isize = sizeof(uint16_t) * idxs.size();
+    VkDeviceSize isize = sizeof(uint32_t) * idxs.size();
     m_engine->createBuffer(vsize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
         m_dirtPathMesh.vertexBuffer, m_dirtPathMesh.vertexBufferMemory);
